@@ -1,6 +1,6 @@
-# Please ensure that any changes remain compliant with 3.1.
+# Updated to require CMake 4.0.3
 if(NOT EMBED_OPENBABEL)
-  cmake_minimum_required(VERSION 3.1)
+  cmake_minimum_required(VERSION 4.0.3)
 endif()
 
 project(openbabel)
