@@ -220,8 +220,8 @@ set(openbabel_library_srcs
 
 if(WIN32)
   if(ZLIB_FOUND)
-    set(libs ${libs} ${ZLIB_LIBRARY})
-  endif(ZLIB_FOUND)
+    set(libs ${libs} ZLIB::ZLIB)
+  endif()
 else(WIN32)
   # the C math library
   if(BUILD_MIXED)
@@ -242,8 +242,8 @@ else(WIN32)
   endif(BUILD_SHARED)
 
   if(ZLIB_FOUND)
-    set(libs ${libs} ${ZLIB_LIBRARY})
-  endif(ZLIB_FOUND)
+    set(libs ${libs} ZLIB::ZLIB)
+  endif()
 endif(WIN32)
 
 add_library(openbabel ${BUILD_TYPE}
