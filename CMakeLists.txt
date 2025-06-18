@@ -166,8 +166,24 @@ endif()
 
 find_package(ZLIB)
 if(ZLIB_FOUND)
+  # Validate that the include directory exists.  Some build environments
+  # may provide an imported target pointing to a stale path which results
+  # in configuration errors.
+  set(_zlib_include "")
+  if(TARGET ZLIB::ZLIB)
+    get_target_property(_zlib_include ZLIB::ZLIB INTERFACE_INCLUDE_DIRECTORIES)
+  elseif(DEFINED ZLIB_INCLUDE_DIR)
+    set(_zlib_include "${ZLIB_INCLUDE_DIR}")
+  endif()
+  if(_zlib_include AND NOT EXISTS "${_zlib_include}")
+    message(WARNING "ZLIB include directory ${_zlib_include} not found; disabling ZLIB support")
+    unset(ZLIB_FOUND)
+  endif()
+endif()
+
+if(ZLIB_FOUND)
   add_definitions(-DHAVE_LIBZ)
-  include_directories(${ZLIB_INCLUDE_DIR})
+  include_directories(${_zlib_include})
   # Longstanding unsolved problem with compression under Windows
   if(WIN32)
     add_definitions(-DDISABLE_WRITE_COMPRESSION)
