@@ -1559,6 +1559,106 @@ unsigned int OBVibrationData::GetNumberOfFrequencies() const
   return this->_vFrequencies.size();
 }
 
+//
+//member functions for OBXrayORCAData class
+//
+/*!
+**\brief Check if XRay data are stored
+**\param bXRayData true or false
+*/
+void OBXrayORCAData::SetXRayData(const bool & bXRayData)
+{
+  this->_bXRayData = bXRayData;
+}
+
+void OBXrayORCAData::SetAbsWavelength(const std::vector<double> & wavelengths)
+{
+  this->_vAbsWavelengths = wavelengths;
+}
+
+void OBXrayORCAData::SetEmWavelength(const std::vector<double> & wavelengths)
+{
+  this->_vEmWavelengths = wavelengths;
+}
+
+void OBXrayORCAData::SetAbsEDipole(const std::vector<double> & vEDipole)
+{
+  this->_vAbsEDipole = vEDipole;
+}
+
+void OBXrayORCAData::SetEmEDipole(const std::vector<double> & vEDipole)
+{
+  this->_vEmEDipole = vEDipole;
+}
+
+void OBXrayORCAData::SetAbsVelocity(const std::vector<double> & vVelosity)
+{
+  this->_vAbsVelocity = vVelosity;
+}
+
+void OBXrayORCAData::SetEmVelosity(const std::vector<double> & vVelosity)
+{
+  this->_vEmVelocity = vVelosity;
+}
+
+void OBXrayORCAData::SetAbsCombined(const std::vector<double> & vAbsCombined)
+{
+  this->_vAbsCombined = vAbsCombined;
+}
+
+void OBXrayORCAData::SetEmCombined(const std::vector<double> & vEmCombined)
+{
+  this->_vEmCombined = vEmCombined;
+}
+
+void OBXrayORCAData::SetAbsD2(const std::vector<double> & vAbsD2)
+{
+  this->_vAbsD2 = vAbsD2;
+}
+
+void OBXrayORCAData::SetAbsM2(const std::vector<double> & vAbsM2)
+{
+  this->_vAbsM2 = vAbsM2;
+}
+
+void OBXrayORCAData::SetAbsQ2(const std::vector<double> & vAbsQ2)
+{
+  this->_vAbsQ2 = vAbsQ2;
+}
+
+void OBXrayORCAData::SetEmD2(const std::vector<double> & vEmD2)
+{
+  this->_vEmD2 = vEmD2;
+}
+
+void OBXrayORCAData::SetEmM2(const std::vector<double> & vEmM2)
+{
+  this->_vEmM2 = vEmM2;
+}
+
+void OBXrayORCAData::SetEmQ2(const std::vector<double> & vEmQ2)
+{
+  this->_vEmQ2 = vEmQ2;
+}
+
+//
+//member functions for OBOrcaNearIRData class
+//
+void OBOrcaNearIRData::SetNearIRData(const bool & bOrcaNearIRData)
+{
+  this->_bOrcaNearIRData = bOrcaNearIRData;
+}
+
+void OBOrcaNearIRData::SetFrequencies(const std::vector<double> & vFrequencies)
+{
+  this->_vNearIRFrequencies = vFrequencies;
+}
+
+void OBOrcaNearIRData::SetIntensities(const std::vector<double> & vIntensities)
+{
+  this->_vNearIRIntensities = vIntensities;
+}
+
 void OBFreeGrid::Clear()
 {
   _points.clear();
