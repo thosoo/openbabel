@@ -70,6 +70,8 @@ namespace OpenBabel
     bool ReadMolecule(OBBase* pOb, OBConversion* pConv) override;
 
     string checkColumns(string tmp);
+    string checkChar(string tmp, const char cTmp);
+    string removeChars(string tmp, const char cTmp);
   };
 
   //Make an instance of the format class
@@ -131,7 +133,10 @@ namespace OpenBabel
     double energy=0;
     //Vibrational data
     std::vector< std::vector< vector3 > > Lx;
-    std::vector<double> Frequencies, Intensities, RamanActivities, UVWavelength, UVForces, UVEDipole;
+    std::vector<double> Frequencies, Intensities, RamanActivities;
+    std::vector<double> NearIRFrequencies, NearIRIntensities;
+    bool NearIRDatafound = false;
+    std::vector<double> UVWavelength, UVForces, UVEDipole;
     std::vector<double> CDWavelength, CDVelosity, CDStrengthsLength;
     // frequencies and normal modes
     std::vector<double> FrequenciesAll;
@@ -395,30 +400,61 @@ namespace OpenBabel
         } // if "NORMAL MODES"}
 
         if (checkKeywords.find("IR SPECTRUM") != notFound) {
+
             Frequencies.resize(0);
             Intensities.resize(0);
 
             ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
             ifs.getline(buffer, BUFF_SIZE); // skip empty line
             ifs.getline(buffer, BUFF_SIZE); // skip header
-            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
-            // for ORCA 5 there are two lines of header...
             ifs.getline(buffer, BUFF_SIZE);
-            if (strstr(buffer, "------") != nullptr)
-                 {
-                     ifs.getline(buffer, BUFF_SIZE);
-                 }
+
             tokenize(vs,buffer);
+            if (vs.size() > 1) {    // skip unit line if any
+              ifs.getline(buffer,BUFF_SIZE);    // skip ---------------------
+            }
+            ifs.getline(buffer, BUFF_SIZE);
+            str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+            str = checkChar (str, '(');  // remove "(" for correct parsing
+            tokenize(vs,str);
 
             while (vs.size() >= 6) {
-                //                std::cout << (atof(vs[1].c_str())) << endl;
-                //                std::cout << (atof(vs[2].c_str())) << endl;
                 Frequencies.push_back(atof(vs[1].c_str()));
                 Intensities.push_back(atof(vs[2].c_str()));
                 ifs.getline(buffer, BUFF_SIZE);
-                tokenize(vs,buffer);
+                str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+                str = checkChar (str, '(');  // remove "(" for correct parsing
+                tokenize(vs,str);
             }
         } // if "IR SPECTRUM"
+        if (checkKeywords.find("OVERTONES AND COMBINATION BANDS") != notFound) {
+            NearIRDatafound = true;
+            NearIRFrequencies.resize(0);
+            NearIRIntensities.resize(0);
+
+            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+            ifs.getline(buffer, BUFF_SIZE); // skip empty line
+            ifs.getline(buffer, BUFF_SIZE); // skip header
+            ifs.getline(buffer, BUFF_SIZE);
+
+            tokenize(vs,buffer);
+            if (vs.size() > 1) {    // skip unit line if any
+                ifs.getline(buffer,BUFF_SIZE);    // skip ---------------------
+            }
+            ifs.getline(buffer, BUFF_SIZE);
+            str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+            str = checkChar (str, '(');  // remove "(" for correct parsing
+            tokenize(vs,str);
+
+            while (vs.size() >= 6) {
+                NearIRFrequencies.push_back(atof(vs[2].c_str()));
+                NearIRIntensities.push_back(atof(vs[3].c_str()));
+                ifs.getline(buffer, BUFF_SIZE);
+                str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+                str = checkChar (str, '(');  // remove "(" for correct parsing
+                tokenize(vs,str);
+            }
+        } // if "OVERTONES AND COMBINATION BANDS"
         if (checkKeywords.find("RAMAN SPECTRUM") != notFound) {
 //        if(strstr(buffer,"RAMAN SPECTRUM") != NULL)
 //        {
@@ -638,6 +674,15 @@ namespace OpenBabel
         mol.SetData(etd);
     }
 
+    if (NearIRDatafound) {
+        OBOrcaNearIRData* nearIRData = new OBOrcaNearIRData;
+        nearIRData->SetFrequencies(NearIRFrequencies);
+        nearIRData->SetIntensities(NearIRIntensities);
+        nearIRData->SetNearIRData(NearIRDatafound);
+        nearIRData->SetOrigin(fileformatInput);
+        mol.SetData(nearIRData);
+    }
+
 
     if (!pConv->IsOption("b",OBConversion::INOPTIONS))
       mol.ConnectTheDots();
@@ -744,4 +789,22 @@ namespace OpenBabel
       return (checkBuffer);
   }
 #endif*/
+
+// remove special characters from input string
+string OrcaOutputFormat::checkChar(string checkBuffer, const char specChar)
+{
+    size_t pos = checkBuffer.find(specChar);
+    while (pos != notFound) {
+        checkBuffer.replace(pos, 1, " ");
+        pos = checkBuffer.find(specChar);
+    }
+    return checkBuffer;
+}
+
+// remove all characters up to special character from input string
+string OrcaOutputFormat::removeChars(string checkBuffer, const char specChar)
+{
+    size_t pos = checkBuffer.find_last_of(specChar);
+    return checkBuffer.substr(pos + 1);
+}
 } //namespace OpenBabel
