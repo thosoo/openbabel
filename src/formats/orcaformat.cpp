@@ -70,6 +70,8 @@ namespace OpenBabel
     bool ReadMolecule(OBBase* pOb, OBConversion* pConv) override;
 
     string checkColumns(string tmp);
+    string checkChar(string tmp, const char cTmp);
+    string removeChars(string tmp, const char cTmp);
   };
 
   //Make an instance of the format class
@@ -131,7 +133,15 @@ namespace OpenBabel
     double energy=0;
     //Vibrational data
     std::vector< std::vector< vector3 > > Lx;
-    std::vector<double> Frequencies, Intensities, RamanActivities, UVWavelength, UVForces, UVEDipole;
+    std::vector<double> Frequencies, Intensities, RamanActivities;
+    std::vector<double> NearIRFrequencies, NearIRIntensities;
+    bool NearIRDatafound = false;
+    std::vector<double> UVWavelength, UVForces, UVEDipole;
+    std::vector<double> UVWavenumber;
+    std::vector<double> AbsWavelength, AbsCombined, AbsD2, AbsM2, AbsQ2;
+    std::vector<double> EmWavelength, EmCombined, EmD2, EmM2, EmQ2;
+    std::vector<double> AbsEDipole, AbsVelosity, EmEDipole, EmVelosity;
+    bool OrcaSpecfound = false;
     std::vector<double> CDWavelength, CDVelosity, CDStrengthsLength;
     // frequencies and normal modes
     std::vector<double> FrequenciesAll;
@@ -395,30 +405,61 @@ namespace OpenBabel
         } // if "NORMAL MODES"}
 
         if (checkKeywords.find("IR SPECTRUM") != notFound) {
+
             Frequencies.resize(0);
             Intensities.resize(0);
 
             ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
             ifs.getline(buffer, BUFF_SIZE); // skip empty line
             ifs.getline(buffer, BUFF_SIZE); // skip header
-            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
-            // for ORCA 5 there are two lines of header...
             ifs.getline(buffer, BUFF_SIZE);
-            if (strstr(buffer, "------") != nullptr)
-                 {
-                     ifs.getline(buffer, BUFF_SIZE);
-                 }
+
             tokenize(vs,buffer);
+            if (vs.size() > 1) {    // skip unit line if any
+              ifs.getline(buffer,BUFF_SIZE);    // skip ---------------------
+            }
+            ifs.getline(buffer, BUFF_SIZE);
+            str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+            str = checkChar (str, '(');  // remove "(" for correct parsing
+            tokenize(vs,str);
 
             while (vs.size() >= 6) {
-                //                std::cout << (atof(vs[1].c_str())) << endl;
-                //                std::cout << (atof(vs[2].c_str())) << endl;
                 Frequencies.push_back(atof(vs[1].c_str()));
                 Intensities.push_back(atof(vs[2].c_str()));
                 ifs.getline(buffer, BUFF_SIZE);
-                tokenize(vs,buffer);
+                str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+                str = checkChar (str, '(');  // remove "(" for correct parsing
+                tokenize(vs,str);
             }
         } // if "IR SPECTRUM"
+        if (checkKeywords.find("OVERTONES AND COMBINATION BANDS") != notFound) {
+            NearIRDatafound = true;
+            NearIRFrequencies.resize(0);
+            NearIRIntensities.resize(0);
+
+            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+            ifs.getline(buffer, BUFF_SIZE); // skip empty line
+            ifs.getline(buffer, BUFF_SIZE); // skip header
+            ifs.getline(buffer, BUFF_SIZE);
+
+            tokenize(vs,buffer);
+            if (vs.size() > 1) {    // skip unit line if any
+                ifs.getline(buffer,BUFF_SIZE);    // skip ---------------------
+            }
+            ifs.getline(buffer, BUFF_SIZE);
+            str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+            str = checkChar (str, '(');  // remove "(" for correct parsing
+            tokenize(vs,str);
+
+            while (vs.size() >= 6) {
+                NearIRFrequencies.push_back(atof(vs[2].c_str()));
+                NearIRIntensities.push_back(atof(vs[3].c_str()));
+                ifs.getline(buffer, BUFF_SIZE);
+                str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+                str = checkChar (str, '(');  // remove "(" for correct parsing
+                tokenize(vs,str);
+            }
+        } // if "OVERTONES AND COMBINATION BANDS"
         if (checkKeywords.find("RAMAN SPECTRUM") != notFound) {
 //        if(strstr(buffer,"RAMAN SPECTRUM") != NULL)
 //        {
@@ -437,27 +478,66 @@ namespace OpenBabel
             }
         } // if "RAMAN SPECTRUM"
 
-        if (checkKeywords.find("ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS") != notFound) {
-//        if(strstr(buffer,"ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS") != NULL)
-//        {
-            UVWavelength.resize(0);
-            UVForces.resize(0);
-            UVEDipole.resize(0);
-            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
-            ifs.getline(buffer, BUFF_SIZE); // skip header
-            ifs.getline(buffer, BUFF_SIZE); // skip header
-            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
-            ifs.getline(buffer, BUFF_SIZE);
-            tokenize(vs,buffer);
-
-            while (vs.size() == 8) {
-                UVForces.push_back(0.0);        // ORCA doesn't have these values
-                UVWavelength.push_back(atof(vs[2].c_str()));
-                UVEDipole.push_back(atof(vs[3].c_str()));
+        if (checkKeywords.find("SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS") != notFound) {
+            // Xray absorption spectrum
+            if ((checkKeywords.find("X-RAY ABSORPTION") != notFound) && (checkKeywords.find("SPIN-ORBIT") == notFound)){
+                OrcaSpecfound = true;
+                AbsWavelength.resize(0);
+                AbsEDipole.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
                 ifs.getline(buffer, BUFF_SIZE);
                 tokenize(vs,buffer);
-            }
-        } // if "ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS"
+
+                while (vs.size() == 9) {
+                    AbsWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+                    AbsEDipole.push_back(atof(vs[5].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } //  if XRAY ABORPTION
+            // XRay emision spectrum
+            else if ((checkKeywords.find("X-RAY EMISSION") != notFound) && (checkKeywords.find("SPIN-ORBIT") == notFound)) {
+                OrcaSpecfound = true;
+                EmWavelength.resize(0);
+                EmEDipole.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 9) {
+                    EmWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+                    EmEDipole.push_back(atof(vs[5].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } // if "XRAY EMISION"
+            else if ((checkKeywords.find("SPIN ORBIT CORRECTED") == notFound)  && (checkKeywords.find("SOC CORRECTED") == notFound)
+                     && (checkKeywords.find("TRANSIENT") == notFound)) {  // NO override with spin corrected values
+              OrcaSpecfound = true;
+              AbsWavelength.resize(0);
+              AbsEDipole.resize(0);
+
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 8) {
+                    AbsWavelength.push_back(1.e7/atof(vs[1].c_str())); //  convert energy in cm-1 to wavelength in nm
+                    AbsEDipole.push_back(atof(vs[3].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } // NO SPIN ORBIT CORRECTED ABSORPTION - just absorption
+        } // if " SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS"
 
         // uv spectrum from  sTDA
         if (checkKeywords.find("excitation energies, transition moments and amplitudes") != notFound) {
@@ -479,6 +559,116 @@ namespace OpenBabel
                 tokenize(vs,buffer);
             }
         } // if "excitation energies, transition moments and amplitudes"
+
+        if (checkKeywords.find("                             ABSORPTION SPECTRUM") != notFound) {     // white spaces before ABSORPTION are necessary !!
+
+            UVWavenumber.resize(0);
+            UVWavelength.resize(0);
+            UVForces.resize(0);
+            UVEDipole.resize(0);
+            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+            ifs.getline(buffer, BUFF_SIZE); // skip header
+            ifs.getline(buffer, BUFF_SIZE); // skip header
+            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+            ifs.getline(buffer, BUFF_SIZE);
+            str = removeChars(string(buffer), ')');  // remove all charcters including ")" up to numbers for correct parsing
+            tokenize(vs,str);
+
+            while (vs.size() == 8) {
+                UVForces.push_back(0.0);        // ORCA doesn't have these values
+                UVWavenumber.push_back(atof(vs[1].c_str()));
+                UVWavelength.push_back(atof(vs[2].c_str()));
+                UVEDipole.push_back(atof(vs[3].c_str()));
+                ifs.getline(buffer, BUFF_SIZE);
+                str = removeChars(string(buffer), ')');  // remove all charcters including ")" up to numbers for correct parsing
+                tokenize(vs,str);
+            }
+        } // if "ABSORPTION SPECTRUM"
+
+        //
+        // COMBINED ELECTRIC DIPOLE + MAGNETIC DIPOLE + ELECTRIC QUADRUPOLE SPECTRUM
+        //
+        if (checkKeywords.find("COMBINED ELECTRIC DIPOLE + MAGNETIC DIPOLE + ELECTRIC QUADRUPOLE") != notFound) {
+
+            if ((checkKeywords.find("X-RAY ABSORPTION") != notFound) &&  (checkKeywords.find("(") == notFound)) {
+                OrcaSpecfound = true;
+                AbsWavelength.resize(0);
+                AbsCombined.resize(0);
+                AbsD2.resize(0);
+                AbsM2.resize(0);
+                AbsQ2.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 12) {
+                    AbsWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+
+                    AbsCombined.push_back(atof(vs[8].c_str()));
+                    AbsD2.push_back(atof(vs[9].c_str()));
+                    AbsM2.push_back(atof(vs[10].c_str()));
+                    AbsQ2.push_back(atof(vs[11].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } else if (checkKeywords.find("X-RAY EMISSION") != notFound) {
+                OrcaSpecfound = true;
+                EmWavelength.resize(0);
+                EmCombined.resize(0);
+                EmD2.resize(0);
+                EmM2.resize(0);
+                EmQ2.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 12) {
+                    EmWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+                    EmCombined.push_back(atof(vs[8].c_str()));
+                    EmD2.push_back(atof(vs[9].c_str()));
+                    EmM2.push_back(atof(vs[10].c_str()));
+                    EmQ2.push_back(atof(vs[11].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } else {
+                OrcaSpecfound = true;
+
+                AbsWavelength.resize(0);
+                AbsCombined.resize(0);
+                AbsD2.resize(0);
+                AbsM2.resize(0);
+                AbsQ2.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 10) {
+                    AbsWavelength.push_back(1.e7/atof(vs[1].c_str())); //  convert energy in cm-1 to wavelength in nm
+                    AbsCombined.push_back(atof(vs[6].c_str()));
+                    AbsD2.push_back(atof(vs[7].c_str()));
+                    AbsM2.push_back(atof(vs[8].c_str()));
+                    AbsQ2.push_back(atof(vs[9].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            }
+        } // if "COMBINED ELECTRIC DIPOLE + MAGNETIC DIPOLE + ELECTRIC QUADRUPOLE"
 
         if (checkKeywords.find("CD SPECTRUM") != notFound) {
 //        if(strstr(buffer,"CD SPECTRUM") != NULL)
@@ -614,6 +804,38 @@ namespace OpenBabel
 
     // Attach UV / CD spectra data if there are any
 
+    if (OrcaSpecfound || (AbsCombined.size() !=0)) {
+        OBOrcaSpecData* orcaSpec = new OBOrcaSpecData;
+        orcaSpec->SetSpecData(OrcaSpecfound);
+        if (AbsWavelength.size() != 0)  {
+            orcaSpec->SetAbsWavelength(AbsWavelength);
+            if (OrcaSpecfound) {
+                if (AbsEDipole.size() != 0)   orcaSpec->SetAbsEDipole(AbsEDipole);
+                if (AbsVelosity.size() != 0)   orcaSpec->SetAbsVelocity(AbsVelosity);
+            }
+            if (AbsCombined.size() != 0) {
+                orcaSpec->SetAbsCombined(AbsCombined);
+                orcaSpec->SetAbsD2(AbsD2);
+                orcaSpec->SetAbsM2(AbsM2);
+                orcaSpec->SetAbsQ2(AbsQ2);
+            }
+        }
+        if (OrcaSpecfound && (EmWavelength.size() != 0))  {
+            orcaSpec->SetEmWavelength(EmWavelength);
+            if (EmEDipole.size() != 0)   orcaSpec->SetEmEDipole(EmEDipole);
+            if (EmVelosity.size() != 0)   orcaSpec->SetEmVelosity(EmVelosity);
+            if (EmCombined.size() != 0) {
+                orcaSpec->SetEmCombined(EmCombined);
+                orcaSpec->SetEmD2(EmD2);
+                orcaSpec->SetEmM2(EmM2);
+                orcaSpec->SetEmQ2(EmQ2);
+            }
+        }
+
+        orcaSpec->SetOrigin(fileformatInput);
+        mol.SetData(orcaSpec);
+    }
+
     if(UVWavelength.size() > 0 || CDWavelength.size() > 0)
     {
         OBElectronicTransitionData* etd = new OBElectronicTransitionData;
@@ -636,6 +858,15 @@ namespace OpenBabel
         }
         etd->SetOrigin(fileformatInput);
         mol.SetData(etd);
+    }
+
+    if (NearIRDatafound) {
+        OBOrcaNearIRData* nearIRData = new OBOrcaNearIRData;
+        nearIRData->SetFrequencies(NearIRFrequencies);
+        nearIRData->SetIntensities(NearIRIntensities);
+        nearIRData->SetNearIRData(NearIRDatafound);
+        nearIRData->SetOrigin(fileformatInput);
+        mol.SetData(nearIRData);
     }
 
 
@@ -744,4 +975,22 @@ namespace OpenBabel
       return (checkBuffer);
   }
 #endif*/
+
+// remove special characters from input string
+string OrcaOutputFormat::checkChar(string checkBuffer, const char specChar)
+{
+    size_t pos = checkBuffer.find(specChar);
+    while (pos != notFound) {
+        checkBuffer.replace(pos, 1, " ");
+        pos = checkBuffer.find(specChar);
+    }
+    return checkBuffer;
+}
+
+// remove all characters up to special character from input string
+string OrcaOutputFormat::removeChars(string checkBuffer, const char specChar)
+{
+    size_t pos = checkBuffer.find_last_of(specChar);
+    return checkBuffer.substr(pos + 1);
+}
 } //namespace OpenBabel
