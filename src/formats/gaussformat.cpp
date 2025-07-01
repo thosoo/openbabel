@@ -734,7 +734,6 @@ namespace OpenBabel
               {
                 mol.DeleteData("Mulliken charges");
               }
-            OBPcharge *Mulliken = new OpenBabel::OBPcharge();
             std::vector<double> MPA_q;
 
             ifs.getline(buffer,BUFF_SIZE);	// column headings
@@ -752,14 +751,7 @@ namespace OpenBabel
                 tokenize(vs,buffer);
 
               }
-            if (MPA_q.size() == mol.NumAtoms())
-            {
-                Mulliken->AddPartialCharge(MPA_q);
-                Mulliken->SetAttribute("Mulliken charges");
-                Mulliken->SetOrigin(fileformatInput);
-                mol.SetData(Mulliken);
-            }
-            else
+            if (MPA_q.size() != mol.NumAtoms())
             {
                 cout << "Read " << MPA_q.size() << " Mulliken charges for " << mol.NumAtoms() << " atoms\n";
             }
@@ -781,8 +773,6 @@ namespace OpenBabel
               {
                 mol.DeleteData("CM5 charges");
               }
-            OBPcharge *Hirshfeld = new OpenBabel::OBPcharge();
-            OBPcharge *CM5       = new OpenBabel::OBPcharge();
             std::vector<double> HPA_q;
             std::vector<double> CM5_q;
             ifs.getline(buffer,BUFF_SIZE);	// column headings
@@ -801,19 +791,8 @@ namespace OpenBabel
                 tokenize(vs,buffer);
 
               }
-            if (CM5_q.size() == mol.NumAtoms() and
-                HPA_q.size() == mol.NumAtoms())
-            {
-                Hirshfeld->AddPartialCharge(HPA_q);
-                Hirshfeld->SetAttribute("Hirshfeld charges");
-                Hirshfeld->SetOrigin(fileformatInput);
-                CM5->AddPartialCharge(CM5_q);
-                CM5->SetAttribute("CM5 charges");
-                CM5->SetOrigin(fileformatInput);
-                mol.SetData(CM5);
-                mol.SetData(Hirshfeld);
-            }
-            else
+            if (!(CM5_q.size() == mol.NumAtoms() &&
+                  HPA_q.size() == mol.NumAtoms()))
             {
                 cout << "Read " << HPA_q.size() << " Hirshfeld charges for " << mol.NumAtoms() << " atoms\n";
             }
@@ -913,7 +892,6 @@ namespace OpenBabel
               {
                 mol.DeleteData("ESP charges");
               }
-            OBPcharge *ESP = new OpenBabel::OBPcharge();
             std::vector<double> ESP_q;
             ifs.getline(buffer,BUFF_SIZE);	// Charge / dipole line
             ifs.getline(buffer,BUFF_SIZE); // column header
@@ -930,14 +908,7 @@ namespace OpenBabel
                 if (!ifs.getline(buffer,BUFF_SIZE)) break;
                 tokenize(vs,buffer);
               }
-            if (ESP_q.size() == mol.NumAtoms())
-            {
-                ESP->AddPartialCharge(ESP_q);
-                ESP->SetAttribute("ESP charges");
-                ESP->SetOrigin(fileformatInput);
-                mol.SetData(ESP);
-            }
-            else
+            if (ESP_q.size() != mol.NumAtoms())
             {
                 cout << "Read " << ESP_q.size() << " ESP charges for " << mol.NumAtoms() << " atoms\n";
             }

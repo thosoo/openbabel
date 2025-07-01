@@ -31,6 +31,11 @@ GNU General Public License for more details.
 #endif*/
 
 #include <iomanip>
+#define _eV_kcal        23.0605             // eV into kcal/mol
+#define _au_eV          27.2113834          // change of a.u. to eV
+
+#define KCAL_TO_KJ	4.1868
+
 
 #define notFound string::npos
 using namespace std;
@@ -129,15 +134,23 @@ namespace OpenBabel
     const char* title = pConv->GetTitle();
 
 
-    // molecule energy
-    double energy=0;
+    // molecule energy and gradient
+    std::vector<double> FinalEnergy;
+    std::vector< std::vector< vector3> > Gradients;
+
     //Vibrational data
+    double skipFreq = 0;
     std::vector< std::vector< vector3 > > Lx;
     std::vector<double> Frequencies, Intensities, RamanActivities;
     std::vector<double> NearIRFrequencies, NearIRIntensities;
     bool NearIRDatafound = false;
-    std::vector<double> UVWavelength, UVForces, UVEDipole;
+    std::vector<double> UVWavenumber, UVWavelength, UVForces, UVEDipole;
     std::vector<double> CDWavelength, CDVelosity, CDStrengthsLength;
+    // Absorption / Emission data or combined data
+    bool OrcaSpecfound = false;
+    std::vector<double> AbsWavelength, AbsCombined, AbsD2, AbsM2, AbsQ2;
+    std::vector<double> EmWavelength, EmCombined, EmD2, EmM2, EmQ2;
+    std::vector<double> AbsEDipole, AbsVelosity, EmEDipole, EmVelosity;
     // frequencies and normal modes
     std::vector<double> FrequenciesAll;
     int nModeAll = 0;
@@ -158,7 +171,9 @@ namespace OpenBabel
     std::vector<vector3> unitCellVectors;
 
     bool hasPartialCharges = false;
-    bool geoOptRun = false;
+    bool geoOptRun  = false;          // flag for optimization run
+    bool scanRun    = false;          // relaxed surface scan
+    bool optSuccess = false;          // flag if optimazation run has converged
 
 
     char buffer[BUFF_SIZE];
@@ -170,17 +185,41 @@ namespace OpenBabel
 
     vector<string> vs;
 
+    int successCount =0;
+    int scanCount=0;
+
+
     mol.BeginModify();
     while	(ifs.getline(buffer,BUFF_SIZE)) {
-
         string checkKeywords(buffer);
 
-        if (checkKeywords.find("* O   R   C   A *") != notFound) {
-            mol.Clear();
+        if (checkKeywords.find("$$$$$$$$$$$$$$$$  JOB NUMBER") != notFound) {
+            mol.EndModify();
+            mol.Clear();         // new orca job - clear molecule
+            mol.BeginModify();
         } // if "new orca output section"
 
+        if (checkKeywords.find("*    Relaxed Surface Scan    *") != notFound) {
+            scanRun = true;
+            geoOptRun = false;
+            FinalEnergy.resize(0);
+            Gradients.resize(0);
+            cout << "Relaxed Surface Scan = true " << endl;
+            while	(ifs.getline(buffer,BUFF_SIZE)) {
+                string checkNAtoms(buffer);
+
+                if (checkNAtoms.find("Number of atoms") != notFound) {
+                    tokenize(vs,buffer);
+                    nAtoms = atoi((char*)vs[4].c_str());
+                    break;
+                }
+            }
+        }
         if (checkKeywords.find("Geometry Optimization Run") != notFound) {
             geoOptRun = true;
+            FinalEnergy.resize(0);
+            Gradients.resize(0);
+            cout << "Geometry Optimization Run = true " << endl;
             while	(ifs.getline(buffer,BUFF_SIZE)) {
                 string checkNAtoms(buffer);
 
@@ -191,14 +230,28 @@ namespace OpenBabel
                 }
             }
         } // if "geometry optimization run"
+        if (checkKeywords.find("***********************HURRAY********************") != notFound && (geoOptRun || scanRun)) {
+          geoOptRun = false;    // optimization run has finished successfully
+          optSuccess = true;
+          successCount ++;
+        } // optimization finished
+        if (checkKeywords.find("RELAXED SURFACE SCAN STEP") != notFound) {
+          scanRun = true;    // next scan started successfully
+          optSuccess = false;
+          scanCount++;
+        } // next relaxed surface scan
+        if (checkKeywords.find("**** RELAXED SURFACE SCAN DONE ***") != notFound) {
+          scanRun = false;    // scan finished
+          optSuccess = false;
+        } // relaxed surface scan finished
+
 
         if (checkKeywords.find("CARTESIAN COORDINATES (ANGSTROEM)") != notFound) {
-            //        if(strstr(buffer,"CARTESIAN COORDINATES (ANGSTROEM)") != NULL) {
             if (unitCell) break; // dont't overwrite unit cell coordinate informations
             if (mol.NumAtoms() == 0) {
                 newMol = true;
             }
-            if (geoOptRun) {
+            if (geoOptRun || scanRun) {
                 confCoords = new double[nAtoms*3];
             }
             ifs.getline(buffer,BUFF_SIZE);	// ---- ----- ----
@@ -216,33 +269,35 @@ namespace OpenBabel
                     atom->SetAtomicNum(OBElements::GetAtomicNum(vs[0].c_str()));                //set atomic number
                     atom->SetVector(x,y,z); //set atom coordinates
                 }
-                if (geoOptRun){
+                if (geoOptRun) {
+                  confCoords[i*3] = x;
+                  confCoords[i*3+1] = y;
+                  confCoords[i*3+2] = z;
+                } else if (scanRun && optSuccess){
                     confCoords[i*3] = x;
                     confCoords[i*3+1] = y;
                     confCoords[i*3+2] = z;
-                    i++;
+                    atom = mol.GetAtom(i+1);
+                    atom->SetVector(x,y,z); //set atom coordinates
                 } else {
+                    atom = mol.GetAtom(i+1);
                     atom->SetVector(x,y,z); //set atom coordinates
                 }
-
+                i++;
                 if (!ifs.getline(buffer,BUFF_SIZE))
                     break;
                 tokenize(vs,buffer);
             }
             newMol = false;
             if (geoOptRun){
-//                cout << confCoords << endl;
-//                for (int j=0;j<3;j++){
-//                    cout << confCoords[j*3] << " " << confCoords[j*3+1] << " " << confCoords[j*3+2] << endl;
-//                }
-
-                mol.AddConformer(confCoords);
-                mol.SetConformer(mol.NumConformers());
+              mol.AddConformer(confCoords);
+            } else if (scanRun && optSuccess) {
+              mol.AddConformer(confCoords);
             }
         } // if "output coordinates"
 
-        if (checkKeywords.find("ORBITAL ENERGIES") != notFound) {
-//        if(strstr(buffer,"ORBITAL ENERGIES") != NULL) {
+        if (checkKeywords.find("ORBITAL ENERGIES") != notFound && !geoOptRun && !scanRun) {
+
             energyEh.resize(0);
             energyeV.resize(0);
             occ.resize(0);
@@ -279,7 +334,7 @@ namespace OpenBabel
                 }
             }
         } // if "ORBITAL ENERGIES"
-        if (checkKeywords.find("Total Charge") != notFound) {
+        if (checkKeywords.find("Total Charge") != notFound && !geoOptRun && !scanRun) {
 
             //get total charge
 
@@ -296,12 +351,12 @@ namespace OpenBabel
                 mol.SetTotalSpinMultiplicity(atoi(vs[3].c_str()));
             }
         }
-        if (checkKeywords.find("MULLIKEN ATOMIC CHARGES") != notFound) {
+        if (checkKeywords.find("MULLIKEN ATOMIC CHARGES") != notFound && !geoOptRun && !scanRun) {
             hasPartialCharges = true;
             ifs.getline(buffer,BUFF_SIZE);	// skip --------------
             ifs.getline(buffer,BUFF_SIZE);
-            tokenize(vs,buffer);
-            //  std::cout << "charges "  << buffer << endl;
+            str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
+            tokenize(vs,str);
 
             while (vs.size() == 4)
             { // atom number, atomic symbol,:,  charge
@@ -313,31 +368,83 @@ namespace OpenBabel
                     break;
                 tokenize(vs,buffer);
             }
-        }
+        } // if "MULLIKEN ATOMIC CHARGES"
+
         if (checkKeywords.find("FINAL SINGLE POINT ENERGY") != notFound) {
-            tokenize(vs,buffer);
-            if (vs.size() == 5) mol.SetEnergy(atof(vs[4].c_str()));
-        }
+          tokenize(vs,buffer);
+          if (geoOptRun) {
+            if (vs.size() == 5) FinalEnergy.push_back(atof(vs[4].c_str())*_eV_kcal*_au_eV);
+          } else if (scanRun && optSuccess){
+            if (vs.size() == 5) {
+              FinalEnergy.push_back(atof(vs[4].c_str())*_eV_kcal*_au_eV);
+              mol.SetEnergy(atof(vs[4].c_str())*_eV_kcal*_au_eV);
+            }
+          } else {
+            if (vs.size() == 5) mol.SetEnergy(atof(vs[4].c_str())*_eV_kcal*_au_eV);
+          }
+        } //if "FINAL SINGLE POINT ENERGY"
+
+        if (checkKeywords.find("CARTESIAN GRADIENT") != notFound) {
+          ifs.getline(buffer,BUFF_SIZE);      // skip ----------
+          ifs.getline(buffer,BUFF_SIZE);      // skip empty line
+          ifs.getline(buffer,BUFF_SIZE);
+
+          tokenize(vs,buffer);
+          vector<vector3> Gradient;
+
+          while (vs.size() == 6) {
+
+              x = atof((char*)vs[3].c_str());
+              y = atof((char*)vs[4].c_str());
+              z = atof((char*)vs[5].c_str());
+
+              Gradient.push_back(vector3(x,y,z));
+
+              if (!ifs.getline(buffer,BUFF_SIZE))
+                  break;
+              tokenize(vs,buffer);
+          }
+          if (geoOptRun) {
+            Gradients.push_back(Gradient);
+          } else if (scanRun && optSuccess){
+              Gradients.push_back(Gradient);
+          }
+
+        } // if "CARTESIAN GRADIENTS"
 
         if (checkKeywords.find("VIBRATIONAL FREQUENCIES") != notFound) {
+          double scaleFac = 1.;
+          double tmpFreq = 0.0;
+          skipFreq = 0;
             FrequenciesAll.resize(0);
-            ifs.getline(buffer, BUFF_SIZE); // skip ----------
-            ifs.getline(buffer, BUFF_SIZE); // skip empty line
-            ifs.getline(buffer, BUFF_SIZE);
-            // check to see if we have a "scaling factor for ORCA 5"
-            if (strstr(buffer, "Scaling factor") != nullptr)
-            {
-                while (strstr(buffer, "cm**-1") == nullptr)
-                {
-                    ifs.getline(buffer, BUFF_SIZE);
-                    }
+            ifs.getline(buffer,BUFF_SIZE);      // skip ----------
+            ifs.getline(buffer,BUFF_SIZE);      // skip empty line
+            ifs.getline(buffer,BUFF_SIZE);
+
+            tokenize(vs,buffer);
+
+            // get scaling factor and skip next empty line (if written)
+            if (vs.size() > 5) {
+              scaleFac = atof(vs[5].c_str());
+              ifs.getline(buffer,BUFF_SIZE);    // skip empty line
             }
-            tokenize(vs, buffer);
-            while (vs.size() > 1)
-            {
-                FrequenciesAll.push_back(atof(vs[1].c_str()));
-                ifs.getline(buffer, BUFF_SIZE);
-                tokenize(vs, buffer);
+            // skip zero frequencies
+            for (int i=0; i<5; i++) {
+              skipFreq ++;
+              ifs.getline(buffer,BUFF_SIZE);  // skip first 5 lines of frequencies - always zero
+            }
+            ifs.getline(buffer,BUFF_SIZE);    // next frequency
+            tokenize(vs,buffer);
+
+            while (vs.size() >1) {
+              tmpFreq = atof(vs[1].c_str());
+              if (tmpFreq == 0.0) {
+                skipFreq ++;                  // skip also this line if frequency is zero
+              } else {
+                FrequenciesAll.push_back(tmpFreq);
+              }
+              ifs.getline(buffer,BUFF_SIZE);
+              tokenize(vs,buffer);
             }
             nModeAll = FrequenciesAll.size();
 
@@ -379,22 +486,19 @@ namespace OpenBabel
                         vib[i].push_back(vector3(x[i], y[i], z[i]));
                     }
 
-//                    std::cout <<" vib.size = "<< vib.size() << endl;
                     ifs.getline(buffer, BUFF_SIZE);
                     str = checkColumns (string(buffer));
                     tokenize(vs,str);
                 } // while
-//                std::cout <<" end while vib.size = "<< vib.size() << endl;
-//                for (unsigned int i = iMode; i < iMode+nColumn; i++) {
+
                 for (unsigned int i = 0; i < nColumn; i++) {
-//                    std::cout << "orca i = "  << i << endl;
-                    if (FrequenciesAll[iMode] > 10.0) { // something higher than 0
-//                        std::cout <<" vib[i].size = " <<i << " " << vib[i].size() << endl;
-                        Lx.push_back(vib[i]);
-//                        std::cout << i<< "  " << Lx[i].size() << endl;
-//                        std::cout << Lx.size() << endl;
-                    }
-                    iMode++;
+                  if (iMode >=skipFreq) {
+                    //                        std::cout <<" vib[i].size = " <<i << " " << vib[i].size() << endl;
+                    Lx.push_back(vib[i]);
+                    //                        std::cout << i<< "  " << Lx[i].size() << endl;
+                    //                        std::cout << Lx.size() << endl;
+                  }
+                  iMode++;
                 }
             } // while
         } // if "NORMAL MODES"}
@@ -472,28 +576,72 @@ namespace OpenBabel
                 tokenize(vs,buffer);
             }
         } // if "RAMAN SPECTRUM"
-
-        if (checkKeywords.find("ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS") != notFound) {
-//        if(strstr(buffer,"ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS") != NULL)
-//        {
-            UVWavelength.resize(0);
-            UVForces.resize(0);
-            UVEDipole.resize(0);
-            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
-            ifs.getline(buffer, BUFF_SIZE); // skip header
-            ifs.getline(buffer, BUFF_SIZE); // skip header
-            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
-            ifs.getline(buffer, BUFF_SIZE);
-            tokenize(vs,buffer);
-
-            while (vs.size() == 8) {
-                UVForces.push_back(0.0);        // ORCA doesn't have these values
-                UVWavelength.push_back(atof(vs[2].c_str()));
-                UVEDipole.push_back(atof(vs[3].c_str()));
+//
+// ABSORPTION/EMISSION spectra
+//
+        if (checkKeywords.find("SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS") != notFound) {
+            // Xray absorption spectrum
+            if ((checkKeywords.find("X-RAY ABSORPTION") != notFound) && (checkKeywords.find("SPIN-ORBIT") == notFound)){
+                OrcaSpecfound = true;
+                AbsWavelength.resize(0);
+                AbsEDipole.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
                 ifs.getline(buffer, BUFF_SIZE);
                 tokenize(vs,buffer);
-            }
-        } // if "ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS"
+
+                while (vs.size() == 9) {
+
+                    AbsWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+
+                    AbsEDipole.push_back(atof(vs[5].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } //  if XRAY ABORPTION
+            // XRay emision spectrum
+            else if ((checkKeywords.find("X-RAY EMISSION") != notFound) && (checkKeywords.find("SPIN-ORBIT") == notFound)) {
+                OrcaSpecfound = true;
+                EmWavelength.resize(0);
+                EmEDipole.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 9) {
+                    EmWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+
+                    EmEDipole.push_back(atof(vs[5].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } // if "XRAY EMISION"
+            else if ((checkKeywords.find("SPIN ORBIT CORRECTED") == notFound)  && (checkKeywords.find("SOC CORRECTED") == notFound)
+                     && (checkKeywords.find("TRANSIENT") == notFound)) {  // NO override with spin corrected values
+              OrcaSpecfound = true;
+              AbsWavelength.resize(0);
+              AbsEDipole.resize(0);
+
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 8) {
+                    AbsWavelength.push_back(1.e7/atof(vs[1].c_str())); //  convert energy in cm-1 to wavelength in nm
+                    AbsEDipole.push_back(atof(vs[3].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } // NO SPIN ORBIT CORRECTED ABSORPTION - just absorption
+        } // if " SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS"
 
         // uv spectrum from  sTDA
         if (checkKeywords.find("excitation energies, transition moments and amplitudes") != notFound) {
@@ -516,6 +664,115 @@ namespace OpenBabel
             }
         } // if "excitation energies, transition moments and amplitudes"
 
+        if (checkKeywords.find("                             ABSORPTION SPECTRUM") != notFound) {     // white spaces before ABSORPTION are necessary !!
+
+            UVWavenumber.resize(0);
+            UVWavelength.resize(0);
+            UVForces.resize(0);
+            UVEDipole.resize(0);
+            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+            ifs.getline(buffer, BUFF_SIZE); // skip header
+            ifs.getline(buffer, BUFF_SIZE); // skip header
+            ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+            ifs.getline(buffer, BUFF_SIZE);
+            str = removeChars(string(buffer), ')');  // remove all charcters including ")" up to numbers for correct parsing
+            tokenize(vs,str);
+
+            while (vs.size() == 8) {
+                UVForces.push_back(0.0);        // ORCA doesn't have these values
+                UVWavenumber.push_back(atof(vs[1].c_str()));
+                UVWavelength.push_back(atof(vs[2].c_str()));
+                UVEDipole.push_back(atof(vs[3].c_str()));
+                ifs.getline(buffer, BUFF_SIZE);
+                str = removeChars(string(buffer), ')');  // remove all charcters including ")" up to numbers for correct parsing
+                tokenize(vs,str);
+            }
+        } // if "ABSORPTION SPECTRUM"
+        //
+        // COMBINED ELECTRIC DIPOLE + MAGNETIC DIPOLE + ELECTRIC QUADRUPOLE SPECTRUM
+        //
+        if (checkKeywords.find("COMBINED ELECTRIC DIPOLE + MAGNETIC DIPOLE + ELECTRIC QUADRUPOLE") != notFound) {
+
+            if ((checkKeywords.find("X-RAY ABSORPTION") != notFound) &&  (checkKeywords.find("(") == notFound)) {
+                OrcaSpecfound = true;
+                AbsWavelength.resize(0);
+                AbsCombined.resize(0);
+                AbsD2.resize(0);
+                AbsM2.resize(0);
+                AbsQ2.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 12) {
+                    AbsWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+
+                    AbsCombined.push_back(atof(vs[8].c_str()));
+                    AbsD2.push_back(atof(vs[9].c_str()));
+                    AbsM2.push_back(atof(vs[10].c_str()));
+                    AbsQ2.push_back(atof(vs[11].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } else if (checkKeywords.find("X-RAY EMISSION") != notFound) {
+                OrcaSpecfound = true;
+                EmWavelength.resize(0);
+                EmCombined.resize(0);
+                EmD2.resize(0);
+                EmM2.resize(0);
+                EmQ2.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 12) {
+                    EmWavelength.push_back(1.e7/(8065.54477*atof(vs[4].c_str()))); //  convert energy in eV to wavelength in nm
+                    EmCombined.push_back(atof(vs[8].c_str()));
+                    EmD2.push_back(atof(vs[9].c_str()));
+                    EmM2.push_back(atof(vs[10].c_str()));
+                    EmQ2.push_back(atof(vs[11].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            } else {
+                OrcaSpecfound = true;
+
+                AbsWavelength.resize(0);
+                AbsCombined.resize(0);
+                AbsD2.resize(0);
+                AbsM2.resize(0);
+                AbsQ2.resize(0);
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip header
+                ifs.getline(buffer, BUFF_SIZE); // skip ---------------------
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs,buffer);
+
+                while (vs.size() == 10) {
+                    //                            UVForces.push_back(0.0);        // ORCA doesn't have these values
+                    AbsWavelength.push_back(1.e7/atof(vs[1].c_str())); //  convert energy in cm-1 to wavelength in nm
+                    AbsCombined.push_back(atof(vs[6].c_str()));
+                    AbsD2.push_back(atof(vs[7].c_str()));
+                    AbsM2.push_back(atof(vs[8].c_str()));
+                    AbsQ2.push_back(atof(vs[9].c_str()));
+                    ifs.getline(buffer, BUFF_SIZE);
+                    tokenize(vs,buffer);
+                }
+            }
+        } // if "COMBINED ELECTRIC DIPOLE + MAGNETIC DIPOLE + ELECTRIC QUADRUPOLE"
         if (checkKeywords.find("CD SPECTRUM") != notFound) {
 //        if(strstr(buffer,"CD SPECTRUM") != NULL)
 //        {
@@ -536,8 +793,6 @@ namespace OpenBabel
                 ifs.getline(buffer, BUFF_SIZE);
                 tokenize(vs,buffer);
             }
-//            std::cout << CDWavelength.size() << endl;
-//            std::cout << CDStrengthsLength.size() << endl;
         } // if "CD SPECTRUM"
 
         if (checkKeywords.find("UNIT CELL (ANGSTROM)") != notFound) { // file contains unit cell information
@@ -605,6 +860,17 @@ namespace OpenBabel
         mol.SetData(uC);
     }
 
+    // Attach conformer data if any
+    if (mol.NumConformers() > 1) {
+        FinalEnergy.push_back(mol.GetEnergy()); // save also energy of scf calculation AFTER optimisation
+                                                // and add them to ConformerData because endModify() will add also the lastest geometry
+        OBConformerData *cd = new OBConformerData;
+        cd->SetEnergies(FinalEnergy);
+        if (Gradients.size() !=0) cd->SetForces(Gradients);
+        mol.SetData(cd);
+      //}
+    }
+
     // Attach orbital data if any
 
     if (energyEh.size() > 0){
@@ -650,6 +916,38 @@ namespace OpenBabel
 
     // Attach UV / CD spectra data if there are any
 
+    if (OrcaSpecfound || (AbsCombined.size() !=0)) {
+        OBOrcaSpecData* orcaSpec = new OBOrcaSpecData;
+        orcaSpec->SetSpecData(OrcaSpecfound);
+        if (AbsWavelength.size() != 0)  {
+            orcaSpec->SetAbsWavelength(AbsWavelength);
+            if (OrcaSpecfound) {
+                if (AbsEDipole.size() != 0)   orcaSpec->SetAbsEDipole(AbsEDipole);
+                if (AbsVelosity.size() != 0)   orcaSpec->SetAbsVelocity(AbsVelosity);
+            }
+            if (AbsCombined.size() != 0) {
+                orcaSpec->SetAbsCombined(AbsCombined);
+                orcaSpec->SetAbsD2(AbsD2);
+                orcaSpec->SetAbsM2(AbsM2);
+                orcaSpec->SetAbsQ2(AbsQ2);
+            }
+        }
+        if (OrcaSpecfound && (EmWavelength.size() != 0))  {
+            orcaSpec->SetEmWavelength(EmWavelength);
+            if (EmEDipole.size() != 0)   orcaSpec->SetEmEDipole(EmEDipole);
+            if (EmVelosity.size() != 0)   orcaSpec->SetEmVelosity(EmVelosity);
+            if (EmCombined.size() != 0) {
+                orcaSpec->SetEmCombined(EmCombined);
+                orcaSpec->SetEmD2(EmD2);
+                orcaSpec->SetEmM2(EmM2);
+                orcaSpec->SetEmQ2(EmQ2);
+            }
+        }
+
+        orcaSpec->SetOrigin(fileformatInput);
+        mol.SetData(orcaSpec);
+    }
+
     if(UVWavelength.size() > 0 || CDWavelength.size() > 0)
     {
         OBElectronicTransitionData* etd = new OBElectronicTransitionData;
@@ -674,26 +972,14 @@ namespace OpenBabel
         mol.SetData(etd);
     }
 
-    if (NearIRDatafound) {
-        OBOrcaNearIRData* nearIRData = new OBOrcaNearIRData;
-        nearIRData->SetFrequencies(NearIRFrequencies);
-        nearIRData->SetIntensities(NearIRIntensities);
-        nearIRData->SetNearIRData(NearIRDatafound);
-        nearIRData->SetOrigin(fileformatInput);
-        mol.SetData(nearIRData);
-    }
-
-
     if (!pConv->IsOption("b",OBConversion::INOPTIONS))
       mol.ConnectTheDots();
+
     if (!pConv->IsOption("s",OBConversion::INOPTIONS) && !pConv->IsOption("b",OBConversion::INOPTIONS))
       mol.PerceiveBondOrders();
 
     mol.EndModify();
 
-
-//    cout << "num conformers = " << mol.NumConformers() << endl;
-    //cout << "Atom index 0 = " << mol.GetAtom(0)->GetX() << " " << mol.GetAtom(0)->GetY() << " " << mol.GetAtom(0)->GetZ() << endl;
     if (hasPartialCharges)
       mol.SetPartialChargesPerceived();
     mol.SetTitle(title);
