@@ -144,7 +144,7 @@ namespace OpenBabel
     std::vector<double> Frequencies, Intensities, RamanActivities;
     std::vector<double> NearIRFrequencies, NearIRIntensities;
     bool NearIRDatafound = false;
-    std::vector<double> UVWavelength, UVForces, UVEDipole;
+    std::vector<double> UVWavenumber, UVWavelength, UVForces, UVEDipole;
     std::vector<double> CDWavelength, CDVelosity, CDStrengthsLength;
     // Absorption / Emission data or combined data
     bool OrcaSpecfound = false;
