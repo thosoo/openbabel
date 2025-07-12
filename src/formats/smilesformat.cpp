@@ -364,12 +364,15 @@ namespace OpenBabel {
       if(pos!=string::npos)
       {
         smiles = ln.substr(0,pos);
+        Trim(smiles);
         title = ln.substr(pos+1);
         Trim(title);
         pmol->SetTitle(title.c_str());
       }
-      else
+      else {
         smiles = ln;
+        Trim(smiles);
+      }
     }
 
     pmol->SetDimension(0);
@@ -592,17 +595,34 @@ namespace OpenBabel {
       }
     }
 
-    // TODO: Only Kekulize if the molecule has a lower case atom
-    bool ok = OBKekulize(&mol);
-    if (!ok) {
-      stringstream errorMsg;
-      errorMsg << "Failed to kekulize aromatic SMILES";
-      std::string title = mol.GetTitle();
-      if (!title.empty())
-        errorMsg << " (title is " << title << ")";
-      errorMsg << endl;
-      obErrorLog.ThrowError(__FUNCTION__, errorMsg.str(), obWarning);
-      // return false; // Should we return false for a kekulization failure?
+    // Only attempt kekulization when aromatic atoms are present
+    bool needsKekulize = false;
+    for (char c : smiles) {
+      if (c >= 'a' && c <= 'z') {
+        needsKekulize = true;
+        break;
+      }
+    }
+
+    bool ok = true;
+    if (needsKekulize) {
+      ok = OBKekulize(&mol);
+      if (!ok) {
+        // Try again after perceiving bond orders which may fail when
+        // extraneous whitespace or line endings confuse the SMILES parser.
+        mol.PerceiveBondOrders();
+        ok = OBKekulize(&mol);
+      }
+      if (!ok) {
+        stringstream errorMsg;
+        errorMsg << "Failed to kekulize aromatic SMILES";
+        std::string title = mol.GetTitle();
+        if (!title.empty())
+          errorMsg << " (title is " << title << ")";
+        errorMsg << endl;
+        obErrorLog.ThrowError(__FUNCTION__, errorMsg.str(), obWarning);
+        // return false; // Should we return false for a kekulization failure?
+      }
     }
 
     // Add the data stored inside the _tetrahedralMap to the atoms now after end
