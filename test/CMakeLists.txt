@@ -5,7 +5,7 @@ add_definitions(-DTESTDATADIR="${CMAKE_SOURCE_DIR}/test/files/")
 if(BINDINGS_ONLY)
   set(FORMATDIR "${OB_MODULE_PATH}/")
 else()
-  set(FORMATDIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/")
+  set(FORMATDIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 endif()
 
 add_definitions(-DFORMATDIR="${FORMATDIR}/")
