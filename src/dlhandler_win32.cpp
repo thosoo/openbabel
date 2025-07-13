@@ -43,6 +43,11 @@ bool DLHandler::getConvDirectory(string& convPath)
     if(env && *env)
     {
         convPath = env;
+        // Windows APIs expect backslashes. Convert any forward slashes.
+        for(char& c : convPath)
+            if(c == '/')
+                c = '\\';
+
         char last = convPath.empty() ? '\0' : convPath.back();
         if(last != '\\' && last != '/')
             convPath += '\\';
