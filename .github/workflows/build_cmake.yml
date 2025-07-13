@@ -89,6 +89,7 @@ jobs:
       working-directory: ${{ runner.workspace }}/build
       env:
         PATH: "${{ runner.workspace }}/build/bin;${{ env.PATH }}"
+        BABEL_LIBDIR: "${{ runner.workspace }}/build/bin"
       run: ctest --output-on-failure
 
     - name: Install Strip
