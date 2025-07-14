@@ -89,14 +89,29 @@ jobs:
       shell: bash
       working-directory: ${{ runner.workspace }}/build
       run: |
-        libdir=$(grep -E '^CMAKE_LIBRARY_OUTPUT_DIRECTORY:.*=' CMakeCache.txt | cut -d= -f2 | tr -d '\r')
-        plugindir=$libdir
-        pluginrel=$(grep -E '^OB_PLUGIN_INSTALL_DIR:.*=' CMakeCache.txt | cut -d= -f2 | tr -d '\r')
-        if [ -d "$libdir/$pluginrel" ]; then
-          plugindir="$libdir/$pluginrel"
+        # Determine the directory where format plugins are built.
+        buildtype=${BUILD_TYPE:-Release}
+        libdir=$(grep -E "^CMAKE_LIBRARY_OUTPUT_DIRECTORY_${buildtype^^}:" CMakeCache.txt | cut -d= -f2 | tr -d '\r')
+        if [ -z "$libdir" ]; then
+          libdir=$(grep -E '^CMAKE_LIBRARY_OUTPUT_DIRECTORY:' CMakeCache.txt | cut -d= -f2 | tr -d '\r')
         fi
+
+        # Some generators append the build type as a subdirectory.
+        if [ -d "$libdir/$buildtype" ]; then
+          libdir="$libdir/$buildtype"
+        fi
+
+        # Trim possible carriage returns and convert any backslashes to Windows style later.
+        plugindir="$libdir"
+
+        # Search for a plugin library to verify the directory.
+        found=$(find "$libdir" -maxdepth 1 -name 'smilesformat.*' -print -quit)
+        if [ -z "$found" ] && [ -d "$libdir/openbabel" ]; then
+          plugindir="$libdir/openbabel"
+        fi
+
         echo "BABEL_LIBDIR=$plugindir" >> "$GITHUB_ENV"
-        echo "$libdir" >> "$GITHUB_PATH"
+        echo "$plugindir" >> "$GITHUB_PATH"
 
     - name: Test
       working-directory: ${{ runner.workspace }}/build
