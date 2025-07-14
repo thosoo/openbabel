@@ -91,17 +91,10 @@ jobs:
       run: |
         libdir=$(grep -E '^CMAKE_LIBRARY_OUTPUT_DIRECTORY:.*=' CMakeCache.txt | cut -d= -f2)
         echo "BABEL_LIBDIR=$libdir" >> "$GITHUB_ENV"
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          echo "PATH=$libdir;$PATH" >> "$GITHUB_ENV"
-        else
-          echo "PATH=$libdir:$PATH" >> "$GITHUB_ENV"
-        fi
+        echo "$libdir" >> "$GITHUB_PATH"
 
     - name: Test
       working-directory: ${{ runner.workspace }}/build
-      env:
-        PATH: ${{ env.PATH }}
-        BABEL_LIBDIR: ${{ env.BABEL_LIBDIR }}
       run: ctest --output-on-failure
 
     - name: Install Strip
