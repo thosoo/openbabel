@@ -46,7 +46,11 @@ MACRO(ADD_PYTHON_TEST TESTNAME FILENAME)
   FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${TESTNAME}.cmake
 "
   SET(ENV{PYTHONPATH} ${pyenv})
-  SET(ENV{LD_LIBRARY_PATH} ${pyenv}:\$ENV{LD_LIBRARY_PATH})
+  if(WIN32)
+    SET(ENV{PATH} ${pyenv};$ENV{PATH})
+  else()
+    SET(ENV{LD_LIBRARY_PATH} ${pyenv}:\$ENV{LD_LIBRARY_PATH})
+  endif()
   SET(ENV{BABEL_LIBDIR} ${ob_libdir})
   SET(ENV{BABEL_DATADIR} ${ob_datadir})
   MESSAGE(\"${pyenv}\")

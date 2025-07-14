@@ -87,9 +87,13 @@ jobs:
       working-directory: ${{ runner.workspace }}/build
 
     - name: Test
-      if: runner.os != 'Windows'
       working-directory: ${{ runner.workspace }}/build
-      run: ctest --output-on-failure
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          export PATH="$(pwd)/bin:$PATH"
+        fi
+        ctest --output-on-failure
 
     - name: Install Strip
       if: matrix.config.artifact != 0
