@@ -85,12 +85,17 @@ jobs:
       shell: bash
       working-directory: ${{ runner.workspace }}/build
 
-    - name: Export library directory
+    - name: Export plugin directory
       shell: bash
       working-directory: ${{ runner.workspace }}/build
       run: |
         libdir=$(grep -E '^CMAKE_LIBRARY_OUTPUT_DIRECTORY:.*=' CMakeCache.txt | cut -d= -f2 | tr -d '\r')
-        echo "BABEL_LIBDIR=$libdir" >> "$GITHUB_ENV"
+        plugindir=$libdir
+        pluginrel=$(grep -E '^OB_PLUGIN_INSTALL_DIR:.*=' CMakeCache.txt | cut -d= -f2 | tr -d '\r')
+        if [ -d "$libdir/$pluginrel" ]; then
+          plugindir="$libdir/$pluginrel"
+        fi
+        echo "BABEL_LIBDIR=$plugindir" >> "$GITHUB_ENV"
         echo "$libdir" >> "$GITHUB_PATH"
 
     - name: Test
