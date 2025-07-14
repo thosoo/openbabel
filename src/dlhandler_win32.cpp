@@ -19,6 +19,7 @@ GNU General Public License for more details.
 
 #include <vector>
 #include <cstdarg>
+#include <cstdlib>
 #include <iostream>
 //# define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -38,6 +39,20 @@ namespace OpenBabel {
 
 bool DLHandler::getConvDirectory(string& convPath)
 {
+    const char* env = getenv("BABEL_LIBDIR");
+    if(env && *env)
+    {
+        convPath = env;
+        // Windows APIs expect backslashes. Convert any forward slashes.
+        for(char& c : convPath)
+            if(c == '/')
+                c = '\\';
+
+        char last = convPath.empty() ? '\0' : convPath.back();
+        if(last != '\\' && last != '/')
+            convPath += '\\';
+        return true;
+    }
     char path[MAX_PATH+1];
   // Get handle to this module in order to determine the path to .obf files.
   //  The exe file may be elsewhere if OpenBabel is being used as a library

@@ -5,7 +5,7 @@ add_definitions(-DTESTDATADIR="${CMAKE_SOURCE_DIR}/test/files/")
 if(BINDINGS_ONLY)
   set(FORMATDIR "${OB_MODULE_PATH}/")
 else()
-  set(FORMATDIR "${openbabel_BINARY_DIR}/lib${LIB_SUFFIX}/")
+  set(FORMATDIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 endif()
 
 add_definitions(-DFORMATDIR="${FORMATDIR}/")
@@ -20,7 +20,7 @@ set(cpptests
   cistrans conversion graphsym gzip addh
   implicitH lssr isomorphism multicml periodic regressions rotor shuffle smiles spectrophore
   squareplanar stereo stereoperception tautomer tetrahedral
-  tetranonplanar tetraplanar uniqueid
+  tetranonplanar tetraplanar uniqueid avogadro
 )
 set(alias_parts 1)
 set(automorphism_parts 1 2 3 4 5 6 7 8 9 10)
@@ -53,6 +53,7 @@ set(tetrahedral_parts 1 2 3 4 5)
 set(tetranonplanar_parts 1)
 set(tetraplanar_parts 1)
 set(uniqueid_parts 1 2)
+set(avogadro_parts 1)
 
 if(EIGEN2_FOUND OR EIGEN3_FOUND)
   set(cpptests
