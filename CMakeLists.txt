@@ -6,6 +6,28 @@ endif()
 project(openbabel)
 set(CMAKE_MODULE_PATH ${openbabel_SOURCE_DIR}/cmake/modules)
 
+option(DOWNLOAD_THOSOO_OPENBABEL "Download and build thosoo/openbabel" OFF)
+
+if(DOWNLOAD_THOSOO_OPENBABEL)
+  include(ExternalProject)
+  ExternalProject_Add(thosoo_openbabel
+    GIT_REPOSITORY https://github.com/thosoo/openbabel.git
+    GIT_TAG 6a16a3d
+    PREFIX ${CMAKE_BINARY_DIR}/thosoo_openbabel
+    UPDATE_COMMAND ""
+    CONFIGURE_COMMAND ${CMAKE_COMMAND} -S <SOURCE_DIR> -B <BINARY_DIR> \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> \
+      -DBUILD_SHARED=ON \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DOB_USE_PREBUILT_BINARIES=OFF \
+      -DOPENBABEL_USE_SYSTEM_INCHI=OFF \
+      -DWITH_INCHI=ON
+    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
+    INSTALL_COMMAND ${CMAKE_COMMAND} --install <BINARY_DIR> --config Release
+  )
+endif()
+
 set (CMAKE_CXX_STANDARD 11)
 
 if(COMMAND cmake_policy)
