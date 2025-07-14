@@ -85,11 +85,23 @@ jobs:
       shell: bash
       working-directory: ${{ runner.workspace }}/build
 
+    - name: Export library directory
+      shell: bash
+      working-directory: ${{ runner.workspace }}/build
+      run: |
+        libdir=$(grep -E '^CMAKE_LIBRARY_OUTPUT_DIRECTORY:.*=' CMakeCache.txt | cut -d= -f2)
+        echo "BABEL_LIBDIR=$libdir" >> "$GITHUB_ENV"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          echo "PATH=$libdir;$PATH" >> "$GITHUB_ENV"
+        else
+          echo "PATH=$libdir:$PATH" >> "$GITHUB_ENV"
+        fi
+
     - name: Test
       working-directory: ${{ runner.workspace }}/build
       env:
-        PATH: "${{ runner.workspace }}/build/bin;${{ env.PATH }}"
-        BABEL_LIBDIR: "${{ runner.workspace }}/build/bin"
+        PATH: ${{ env.PATH }}
+        BABEL_LIBDIR: ${{ env.BABEL_LIBDIR }}
       run: ctest --output-on-failure
 
     - name: Install Strip
