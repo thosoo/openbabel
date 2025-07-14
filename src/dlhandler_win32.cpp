@@ -43,6 +43,12 @@ bool DLHandler::getConvDirectory(string& convPath)
     if(env && *env)
     {
         convPath = env;
+        // Strip any trailing newlines or carriage returns that may have been
+        // introduced when exporting the environment variable from text files.
+        while(!convPath.empty() &&
+              (convPath.back() == '\n' || convPath.back() == '\r'))
+            convPath.pop_back();
+
         // Windows APIs expect backslashes. Convert any forward slashes.
         for(char& c : convPath)
             if(c == '/')

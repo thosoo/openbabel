@@ -89,7 +89,7 @@ jobs:
       shell: bash
       working-directory: ${{ runner.workspace }}/build
       run: |
-        libdir=$(grep -E '^CMAKE_LIBRARY_OUTPUT_DIRECTORY:.*=' CMakeCache.txt | cut -d= -f2)
+        libdir=$(grep -E '^CMAKE_LIBRARY_OUTPUT_DIRECTORY:.*=' CMakeCache.txt | cut -d= -f2 | tr -d '\r')
         echo "BABEL_LIBDIR=$libdir" >> "$GITHUB_ENV"
         echo "$libdir" >> "$GITHUB_PATH"
 
