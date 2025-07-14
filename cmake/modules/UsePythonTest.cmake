@@ -44,15 +44,15 @@ MACRO(ADD_PYTHON_TEST TESTNAME FILENAME)
   GET_SOURCE_FILE_PROPERTY(ob_datadir ${FILENAME} BABEL_DATADIR)
   STRING(REGEX REPLACE ";" " " wo_semicolumn "${ARGN}")
   FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${TESTNAME}.cmake
-"
-  SET(ENV{PYTHONPATH} ${pyenv})
+  "
+  SET(ENV{PYTHONPATH} \"${pyenv}\")
   if(WIN32)
-    SET(ENV{PATH} ${pyenv};$ENV{PATH})
+    SET(ENV{PATH} \"${pyenv};\$ENV{PATH}\")
   else()
-    SET(ENV{LD_LIBRARY_PATH} ${pyenv}:\$ENV{LD_LIBRARY_PATH})
+    SET(ENV{LD_LIBRARY_PATH} \"${pyenv}:\$ENV{LD_LIBRARY_PATH}\")
   endif()
-  SET(ENV{BABEL_LIBDIR} ${ob_libdir})
-  SET(ENV{BABEL_DATADIR} ${ob_datadir})
+  SET(ENV{BABEL_LIBDIR} \"${ob_libdir}\")
+  SET(ENV{BABEL_DATADIR} \"${ob_datadir}\")
   MESSAGE(\"${pyenv}\")
   EXECUTE_PROCESS(
   	COMMAND ${PYTHON_EXECUTABLE} ${loc} ${wo_semicolumn}
