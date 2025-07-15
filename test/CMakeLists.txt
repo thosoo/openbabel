@@ -163,7 +163,7 @@ foreach(cpptest ${cpptests})
     add_test(test_${cpptest}_${part}
       ${TEST_PATH}/test_runner ${cpptest}test ${part})
     if(WIN32)
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\;$ENV{PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
     else()
       set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
     endif()
@@ -178,7 +178,7 @@ foreach(cpptest ${origtests})
     add_test(test_${cpptest}_${part}
       ${TEST_PATH}/test_runner ${cpptest} ${part})
     if(WIN32)
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\;$ENV{PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
     else()
       set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
     endif()
@@ -211,7 +211,7 @@ if(WITH_INCHI)
     add_test(inchi${test}_Test
       ${TEST_PATH}/test_inchiwrite ${inchidata}/${test} ${inchidata}/${test}.txt)
     if(WIN32)
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\;$ENV{PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
     else()
       set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
     endif()
@@ -258,7 +258,6 @@ if(NOT MINGW AND NOT CYGWIN)
           PYTHONPATH "${CMAKE_SOURCE_DIR}/scripts/python;${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
           BABEL_LIBDIR "${FORMATDIR}"
           BABEL_DATADIR "${CMAKE_SOURCE_DIR}/data"
-          PATH "${CMAKE_LIBRARY_OUTPUT_DIRECTORY};$ENV{PATH}"
         )
       else()
         SET_SOURCE_FILES_PROPERTIES(test${pytest}.py PROPERTIES
@@ -269,8 +268,14 @@ if(NOT MINGW AND NOT CYGWIN)
         )
       endif()
       ADD_PYTHON_TEST(pytest_${pytest} test${pytest}.py)
+      if(WIN32)
+        set(_py_env "PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY};$ENV{PATH}")
+      else()
+        set(_py_env "LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
+      endif()
       set_tests_properties(pytest_${pytest} PROPERTIES
         FAIL_REGULAR_EXPRESSION "ERROR;FAIL;Test failed"
+        ENVIRONMENT "${_py_env}"
       )
     endforeach(pytest ${pytests})
   endif(PYTHON_EXECUTABLE)
@@ -297,7 +302,6 @@ if(PYTHON_BINDINGS)
         PYTHONPATH "${CMAKE_SOURCE_DIR}/scripts/python;${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
         BABEL_LIBDIR "${FORMATDIR}"
         BABEL_DATADIR "${CMAKE_SOURCE_DIR}/data"
-        PATH "${CMAKE_LIBRARY_OUTPUT_DIRECTORY};$ENV{PATH}"
       )
     else()
       SET_SOURCE_FILES_PROPERTIES(test${pybindtest}.py PROPERTIES
@@ -315,8 +319,14 @@ if(PYTHON_BINDINGS)
     endif()
 
     ADD_PYTHON_TEST(pybindtest_${pybindtest} test${pybindtest}.py)
+    if(WIN32)
+      set(_py_env "PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY};$ENV{PATH}")
+    else()
+      set(_py_env "LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
+    endif()
     set_tests_properties(pybindtest_${pybindtest} PROPERTIES
       FAIL_REGULAR_EXPRESSION "ERROR;FAIL;Test failed"
+      ENVIRONMENT "${_py_env}"
     )
   endforeach(pybindtest ${pybindtests})
 endif(PYTHON_BINDINGS)
