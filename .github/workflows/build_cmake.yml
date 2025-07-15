@@ -91,13 +91,24 @@ jobs:
       shell: bash
       working-directory: ${{ runner.workspace }}/build
 
+    - name: Verify plugins
+      if: runner.os == 'Windows'
+      run: |
+        echo "Listing bin directory" && ls -al "${{ runner.workspace }}/build/bin"
+        echo "Listing lib directory" && ls -al "${{ runner.workspace }}/build/lib" || true
+        if ! ls "${{ runner.workspace }}/build"/bin/*.obf 2> /dev/null; then
+          echo "No plugins found" && exit 1
+        fi
+        echo "BABEL_LIBDIR=${{ runner.workspace }}/build/bin/" >> $GITHUB_ENV
+
     - name: Test
       working-directory: ${{ runner.workspace }}/build
       shell: bash
       run: |
         if [ "$RUNNER_OS" = "Windows" ]; then
           export PATH="$(pwd)/bin:$PATH"
-          export BABEL_LIBDIR="$(pwd)/bin"
+          export BABEL_LIBDIR="$(pwd)/bin/"
+          echo "BABEL_LIBDIR=$(pwd)/bin/" >> $GITHUB_ENV
         fi
         ctest --output-on-failure
 

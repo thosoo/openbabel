@@ -27,6 +27,7 @@ GNU General Public License for more details.
 //#include <direct.h>
 #include <windows.h>
 #include <openbabel/dlhandler.h>
+#include <openbabel/oberror.h>
 using namespace std;
 
 namespace OpenBabel {
@@ -99,6 +100,12 @@ int DLHandler :: findFiles (std::vector<std::string>& file_list,const std::strin
     buffer[BUFF_SIZE-1] = '\0';
     OpenBabel::tokenize(vs, buffer, ";");
     if(!vs.empty()) {
+      std::string msg = "BABEL_LIBDIR=" + std::string(buffer);
+      obErrorLog.ThrowError(__FUNCTION__, msg, obDebug);
+    } else {
+      obErrorLog.ThrowError(__FUNCTION__, "BABEL_LIBDIR empty", obDebug);
+    }
+    if(!vs.empty()) {
       for (unsigned int i = 0; i < vs.size(); ++i)
         paths.push_back(vs[i]);
     }
@@ -111,6 +118,7 @@ int DLHandler :: findFiles (std::vector<std::string>& file_list,const std::strin
   for (unsigned int i = 0; i < paths.size(); ++i)
   {
     currentPath = paths.at(i);
+    obErrorLog.ThrowError(__FUNCTION__, "Searching " + currentPath, obDebug);
     WIN32_FIND_DATA file_data;
     HANDLE handle;
     handle = FindFirstFile ((currentPath + pattern).c_str(), &file_data);
@@ -145,6 +153,7 @@ bool DLHandler :: openLib(const string& lib_name)
         return true;
 
     unsigned long err = GetLastError();
+    obErrorLog.ThrowError(__FUNCTION__, "LoadLibrary failed " + lib_name, obDebug);
     return false;
 }
 
