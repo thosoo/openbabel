@@ -93,6 +93,7 @@ jobs:
 
     - name: Verify plugins
       if: runner.os == 'Windows'
+      shell: bash
       run: |
         echo "Listing bin directory" && ls -al "${{ runner.workspace }}/build/bin"
         echo "Listing lib directory" && ls -al "${{ runner.workspace }}/build/lib" || true
