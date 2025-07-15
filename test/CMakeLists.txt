@@ -163,9 +163,9 @@ foreach(cpptest ${cpptests})
     add_test(test_${cpptest}_${part}
       ${TEST_PATH}/test_runner ${cpptest}test ${part})
     if(WIN32)
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY};PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
     else()
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY};LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
     endif()
     set_tests_properties(test_${cpptest}_${part} PROPERTIES
       FAIL_REGULAR_EXPRESSION "ERROR;FAIL;Test failed"
@@ -178,9 +178,9 @@ foreach(cpptest ${origtests})
     add_test(test_${cpptest}_${part}
       ${TEST_PATH}/test_runner ${cpptest} ${part})
     if(WIN32)
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY};PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
     else()
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY};LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
     endif()
     set_tests_properties(test_${cpptest}_${part} PROPERTIES
       FAIL_REGULAR_EXPRESSION "not ok"
@@ -211,9 +211,9 @@ if(WITH_INCHI)
     add_test(inchi${test}_Test
       ${TEST_PATH}/test_inchiwrite ${inchidata}/${test} ${inchidata}/${test}.txt)
     if(WIN32)
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY};PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
     else()
-      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
+      set(_ob_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY};LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
     endif()
     set_tests_properties(inchi${test}_Test PROPERTIES
       FAIL_REGULAR_EXPRESSION "Not ok"
