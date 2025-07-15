@@ -19,6 +19,7 @@ GNU General Public License for more details.
 
 #include <vector>
 #include <cstdarg>
+#include <cstdlib>
 #include <iostream>
 //# define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -90,6 +91,18 @@ int DLHandler :: findFiles (std::vector<std::string>& file_list,const std::strin
 
   if (!path.empty())
     paths.push_back(path);
+
+  char buffer[BUFF_SIZE];
+  if(getenv("BABEL_LIBDIR") != NULL) {
+    paths.clear();
+    strncpy(buffer, getenv("BABEL_LIBDIR"), BUFF_SIZE-1);
+    buffer[BUFF_SIZE-1] = '\0';
+    OpenBabel::tokenize(vs, buffer, ";");
+    if(!vs.empty()) {
+      for (unsigned int i = 0; i < vs.size(); ++i)
+        paths.push_back(vs[i]);
+    }
+  }
 
   if (paths.empty())
     paths.push_back("./"); // defaults to current directory
