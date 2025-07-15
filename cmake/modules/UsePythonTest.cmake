@@ -42,6 +42,11 @@ MACRO(ADD_PYTHON_TEST TESTNAME FILENAME)
   GET_SOURCE_FILE_PROPERTY(pyenv ${FILENAME} PYTHONPATH)
   GET_SOURCE_FILE_PROPERTY(ob_libdir ${FILENAME} BABEL_LIBDIR)
   GET_SOURCE_FILE_PROPERTY(ob_datadir ${FILENAME} BABEL_DATADIR)
+  if(WIN32)
+    file(TO_CMAKE_PATH "${pyenv}" pyenv)
+    file(TO_CMAKE_PATH "${ob_libdir}" ob_libdir)
+    file(TO_CMAKE_PATH "${ob_datadir}" ob_datadir)
+  endif()
   STRING(REGEX REPLACE ";" " " wo_semicolumn "${ARGN}")
   FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${TESTNAME}.cmake
   "
