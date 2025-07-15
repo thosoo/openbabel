@@ -78,7 +78,12 @@ jobs:
       run: |
         mkdir "${{ runner.workspace }}/build"
         cd "${{ runner.workspace }}/build"
-        cmake $GITHUB_WORKSPACE -GNinja -DCMAKE_C_COMPILER=${{matrix.config.cc}} -DCMAKE_CXX_COMPILER=${{matrix.config.cxx}} ${{matrix.config.cmake_flags}}
+        cmake $GITHUB_WORKSPACE -GNinja \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DBUILD_SHARED=ON \
+          -DCMAKE_C_COMPILER=${{matrix.config.cc}} \
+          -DCMAKE_CXX_COMPILER=${{matrix.config.cxx}} \
+          ${{matrix.config.cmake_flags}}
       shell: bash
 
     - name: Build
@@ -92,6 +97,7 @@ jobs:
       run: |
         if [ "$RUNNER_OS" = "Windows" ]; then
           export PATH="$(pwd)/bin:$PATH"
+          export BABEL_LIBDIR="$(pwd)/bin"
         fi
         ctest --output-on-failure
 
