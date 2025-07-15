@@ -101,9 +101,9 @@ int DLHandler :: findFiles (std::vector<std::string>& file_list,const std::strin
     OpenBabel::tokenize(vs, buffer, ";");
     if(!vs.empty()) {
       std::string msg = "BABEL_LIBDIR=" + std::string(buffer);
-      obErrorLog.ThrowError(__FUNCTION__, msg, obDebug);
+      OpenBabel::obErrorLog.ThrowError(__FUNCTION__, msg, OpenBabel::obDebug);
     } else {
-      obErrorLog.ThrowError(__FUNCTION__, "BABEL_LIBDIR empty", obDebug);
+      OpenBabel::obErrorLog.ThrowError(__FUNCTION__, "BABEL_LIBDIR empty", OpenBabel::obDebug);
     }
     if(!vs.empty()) {
       for (unsigned int i = 0; i < vs.size(); ++i)
@@ -118,7 +118,7 @@ int DLHandler :: findFiles (std::vector<std::string>& file_list,const std::strin
   for (unsigned int i = 0; i < paths.size(); ++i)
   {
     currentPath = paths.at(i);
-    obErrorLog.ThrowError(__FUNCTION__, "Searching " + currentPath, obDebug);
+    OpenBabel::obErrorLog.ThrowError(__FUNCTION__, "Searching " + currentPath, OpenBabel::obDebug);
     WIN32_FIND_DATA file_data;
     HANDLE handle;
     handle = FindFirstFile ((currentPath + pattern).c_str(), &file_data);
@@ -153,7 +153,7 @@ bool DLHandler :: openLib(const string& lib_name)
         return true;
 
     unsigned long err = GetLastError();
-    obErrorLog.ThrowError(__FUNCTION__, "LoadLibrary failed " + lib_name, obDebug);
+    OpenBabel::obErrorLog.ThrowError(__FUNCTION__, "LoadLibrary failed " + lib_name, OpenBabel::obDebug);
     return false;
 }
 
