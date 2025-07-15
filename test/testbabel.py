@@ -68,7 +68,9 @@ def executable(name):
     folder = "bin"
     if sys.platform == "win32":
         suffix = ".exe"
-        folder = os.path.join(folder, "Release")
+        rel = os.path.join("..", "bin", "Release")
+        if os.path.isdir(rel):
+            folder = os.path.join("bin", "Release")
     return os.path.join("..", folder, name + suffix)
 
 def log(text):
@@ -526,6 +528,10 @@ charge 1
     def testOBRMS(self):
         '''Sanity checks for obrms'''
         sdffile = self.getTestFile('testsym_2Dtests.sdf')
+        try:
+            self.canFindExecutable("obrms")
+        except AssertionError:
+            self.skipTest("obrms tool not built")
         output, err = run_exec( "obrms -t 10 %s %s"%(sdffile,sdffile))
         # all rmsds should be zero
         rmsds = [float(line.split()[-1]) for line in output.split('\n') if line]
