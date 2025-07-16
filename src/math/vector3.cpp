@@ -22,6 +22,8 @@ GNU General Public License for more details.
 
 #include <iostream>
 #include <cfloat>
+#include <cmath>
+#include <limits>
 
 #include <openbabel/math/vector3.h>
 #include "../rand.h"
@@ -141,23 +143,24 @@ namespace OpenBabel
          && CanBeSquared(_vz) );
   }
 
-  /*! This method normalizes *this. In other words, it divides
-   * the x,y,z coords of *this by this->length().
-   * If *this can't be safely normalized, it remains unchanged.
-   * See CanBeNormalized().
+  /*! Normalize the vector by dividing each component by its length.
+   * If the vector is extremely short, leave it unchanged to avoid
+   * generating NaN coordinates during division.
 
    @returns a reference to *this
-
    */
   vector3& vector3 :: normalize ()
   {
 #ifdef OB_OLD_MATH_CHECKS
-    if( CanBeNormalized() )
-      (*this) /= length();
-#else
-    (*this) /= length();
+    if (!CanBeNormalized())
+      return *this;
 #endif
-    return(*this);
+    // Avoid dividing by zero when the vector is nearly null
+    const double len2 = length_2();
+    if (len2 <= std::numeric_limits<double>::epsilon())
+      return *this;
+    (*this) /= std::sqrt(len2);
+    return *this;
   }
 
   OBAPI vector3 cross ( const vector3& v1, const vector3& v2 )

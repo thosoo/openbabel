@@ -217,6 +217,10 @@ namespace OpenBabel
     //  Member Functions
 
     //! Scales a vector to give it length one.
+    //! Normalize the vector in place.
+    //!
+    //! If the vector is extremely short the operation becomes a no-op to
+    //! avoid creating NaN values when dividing by zero.
     //! \return the result (i.e., the normalized vector)
     vector3& normalize () ;
 
