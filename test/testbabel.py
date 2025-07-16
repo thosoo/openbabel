@@ -59,8 +59,11 @@ def run_exec(*args):
 
     if p.returncode and len(stderr) == 0:
         #should never exit with an error without an error message
-        raise CalledProcessError(p.returncode,commandline,stdout.decode())
-    return stdout.decode(), stderr.decode()
+        raise CalledProcessError(p.returncode, commandline, stdout.decode())
+
+    out = stdout.decode().replace('\r\n', '\n')
+    err = stderr.decode().replace('\r\n', '\n')
+    return out, err
 
 def executable(name):
     """Return the full path to an executable"""
@@ -68,7 +71,9 @@ def executable(name):
     folder = "bin"
     if sys.platform == "win32":
         suffix = ".exe"
-        folder = os.path.join(folder, "Release")
+        rel = os.path.join("..", "bin", "Release")
+        if os.path.isdir(rel):
+            folder = os.path.join("bin", "Release")
     return os.path.join("..", folder, name + suffix)
 
 def log(text):
@@ -526,6 +531,10 @@ charge 1
     def testOBRMS(self):
         '''Sanity checks for obrms'''
         sdffile = self.getTestFile('testsym_2Dtests.sdf')
+        try:
+            self.canFindExecutable("obrms")
+        except AssertionError:
+            self.skipTest("obrms tool not built")
         output, err = run_exec( "obrms -t 10 %s %s"%(sdffile,sdffile))
         # all rmsds should be zero
         rmsds = [float(line.split()[-1]) for line in output.split('\n') if line]
