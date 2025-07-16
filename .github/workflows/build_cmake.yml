@@ -107,6 +107,9 @@ jobs:
         if ! ls "${{ runner.workspace }}/build"/bin/*.obf 2> /dev/null; then
           echo "No plugins found" && exit 1
         fi
+        if [ ! -f "${{ runner.workspace }}/build/bin/openbabel-3.dll" ]; then
+          echo "openbabel DLL missing" && exit 1
+        fi
         echo "BABEL_LIBDIR=${{ runner.workspace }}/build/bin/" >> $GITHUB_ENV
 
     - name: Test
