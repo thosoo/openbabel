@@ -59,8 +59,11 @@ def run_exec(*args):
 
     if p.returncode and len(stderr) == 0:
         #should never exit with an error without an error message
-        raise CalledProcessError(p.returncode,commandline,stdout.decode())
-    return stdout.decode(), stderr.decode()
+        raise CalledProcessError(p.returncode, commandline, stdout.decode())
+
+    out = stdout.decode().replace('\r\n', '\n')
+    err = stderr.decode().replace('\r\n', '\n')
+    return out, err
 
 def executable(name):
     """Return the full path to an executable"""
