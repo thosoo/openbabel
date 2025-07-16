@@ -61,6 +61,9 @@ MACRO(ADD_PYTHON_TEST TESTNAME FILENAME)
   endif()
   SET(ENV{BABEL_DATADIR} \"${ob_datadir}\")
   MESSAGE(\"${pyenv}\")
+  if(NOT \"${ob_libdir}\" STREQUAL \"\")
+    MESSAGE(\"BABEL_LIBDIR=${ob_libdir}\")
+  endif()
   EXECUTE_PROCESS(
   	COMMAND ${PYTHON_EXECUTABLE} ${loc} ${wo_semicolumn}
   	#WORKING_DIRECTORY @LIBRARY_OUTPUT_PATH@
