@@ -91,6 +91,13 @@ jobs:
       shell: bash
       working-directory: ${{ runner.workspace }}/build
 
+    - name: Copy Windows runtime libraries
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        cp "$GITHUB_WORKSPACE/$DEPS"/libs-common/x64/*.dll "${{ runner.workspace }}/build/bin/"
+        cp "$GITHUB_WORKSPACE/$DEPS"/libs-vs12/x64/*.dll "${{ runner.workspace }}/build/bin/"
+
     - name: Verify plugins
       if: runner.os == 'Windows'
       shell: bash
