@@ -106,8 +106,12 @@ int DLHandler :: findFiles (std::vector<std::string>& file_list,const std::strin
       OpenBabel::obErrorLog.ThrowError(__FUNCTION__, "BABEL_LIBDIR empty", OpenBabel::obDebug);
     }
     if(!vs.empty()) {
-      for (unsigned int i = 0; i < vs.size(); ++i)
-        paths.push_back(vs[i]);
+      for (unsigned int i = 0; i < vs.size(); ++i) {
+        std::string p = vs[i];
+        if(!p.empty() && p.back() != '/' && p.back() != '\\')
+          p += getSeparator();
+        paths.push_back(p);
+      }
     }
   }
 
