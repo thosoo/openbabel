@@ -110,7 +110,6 @@ jobs:
         if [ ! -f "${{ runner.workspace }}/build/bin/openbabel-3.dll" ]; then
           echo "openbabel DLL missing" && exit 1
         fi
-        echo "BABEL_LIBDIR=${{ runner.workspace }}/build/bin/" >> $GITHUB_ENV
 
     - name: Test
       working-directory: ${{ runner.workspace }}/build
@@ -118,8 +117,6 @@ jobs:
       run: |
         if [ "$RUNNER_OS" = "Windows" ]; then
           export PATH="$(pwd)/bin:$PATH"
-          export BABEL_LIBDIR="$(pwd)/bin/"
-          echo "BABEL_LIBDIR=$(pwd)/bin/" >> $GITHUB_ENV
         fi
         ctest --output-on-failure
 
