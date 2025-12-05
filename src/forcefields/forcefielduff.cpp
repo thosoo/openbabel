@@ -102,10 +102,15 @@ namespace OpenBabel {
       #endif
 
       IF_OBFF_LOGLVL_HIGH {
-        snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s  %4.2f%8.3f   %8.3f     %8.3f   %8.3f   %8.3f\n",
-                 _bondcalculations[i].a->GetType(), _bondcalculations[i].b->GetType(),
-                 _bondcalculations[i].bt, _bondcalculations[i].rab, _bondcalculations[i].r0, _bondcalculations[i].kb, _bondcalculations[i].delta, _bondcalculations[i].energy);
-        OBFFLog(_logbuf);
+        #ifdef _OPENMP
+        #pragma omp critical
+        #endif
+        {
+          snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s  %4.2f%8.3f   %8.3f     %8.3f   %8.3f   %8.3f\n",
+                   _bondcalculations[i].a->GetType(), _bondcalculations[i].b->GetType(),
+                   _bondcalculations[i].bt, _bondcalculations[i].rab, _bondcalculations[i].r0, _bondcalculations[i].kb, _bondcalculations[i].delta, _bondcalculations[i].energy);
+          OBFFLog(_logbuf);
+        }
       }
     }
 
@@ -242,9 +247,14 @@ namespace OpenBabel {
       #endif
 
       IF_OBFF_LOGLVL_HIGH {
-        snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %-5s%8.3f  %8.3f     %8.3f   %8.3f   %8.3f\n", _anglecalculations[i].a->GetType(), _anglecalculations[i].b->GetType(),
-                 _anglecalculations[i].c->GetType(), _anglecalculations[i].theta * RAD_TO_DEG, _anglecalculations[i].theta0, _anglecalculations[i].ka, _anglecalculations[i].delta, _anglecalculations[i].energy);
-        OBFFLog(_logbuf);
+        #ifdef _OPENMP
+        #pragma omp critical
+        #endif
+        {
+          snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %-5s%8.3f  %8.3f     %8.3f   %8.3f   %8.3f\n", _anglecalculations[i].a->GetType(), _anglecalculations[i].b->GetType(),
+                   _anglecalculations[i].c->GetType(), _anglecalculations[i].theta * RAD_TO_DEG, _anglecalculations[i].theta0, _anglecalculations[i].ka, _anglecalculations[i].delta, _anglecalculations[i].energy);
+          OBFFLog(_logbuf);
+        }
       }
     }
 
@@ -343,11 +353,16 @@ namespace OpenBabel {
       #endif
 
       IF_OBFF_LOGLVL_HIGH {
-        snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %-5s %-5s%6.3f       %8.3f     %8.3f\n",
-                 _torsioncalculations[i].a->GetType(), _torsioncalculations[i].b->GetType(),
-                 _torsioncalculations[i].c->GetType(), _torsioncalculations[i].d->GetType(), _torsioncalculations[i].V,
-                 _torsioncalculations[i].tor * RAD_TO_DEG, _torsioncalculations[i].energy);
-        OBFFLog(_logbuf);
+        #ifdef _OPENMP
+        #pragma omp critical
+        #endif
+        {
+          snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %-5s %-5s%6.3f       %8.3f     %8.3f\n",
+                   _torsioncalculations[i].a->GetType(), _torsioncalculations[i].b->GetType(),
+                   _torsioncalculations[i].c->GetType(), _torsioncalculations[i].d->GetType(), _torsioncalculations[i].V,
+                   _torsioncalculations[i].tor * RAD_TO_DEG, _torsioncalculations[i].energy);
+          OBFFLog(_logbuf);
+        }
       }
     }
 
@@ -440,9 +455,14 @@ namespace OpenBabel {
       #endif
 
       IF_OBFF_LOGLVL_HIGH {
-        snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %-5s %-5s%8.3f   %8.3f     %8.3f\n", _oopcalculations[i].a->GetType(), _oopcalculations[i].b->GetType(), _oopcalculations[i].c->GetType(), _oopcalculations[i].d->GetType(),
-                 _oopcalculations[i].angle * RAD_TO_DEG, _oopcalculations[i].koop, _oopcalculations[i].energy);
-        OBFFLog(_logbuf);
+        #ifdef _OPENMP
+        #pragma omp critical
+        #endif
+        {
+          snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %-5s %-5s%8.3f   %8.3f     %8.3f\n", _oopcalculations[i].a->GetType(), _oopcalculations[i].b->GetType(), _oopcalculations[i].c->GetType(), _oopcalculations[i].d->GetType(),
+                   _oopcalculations[i].angle * RAD_TO_DEG, _oopcalculations[i].koop, _oopcalculations[i].energy);
+          OBFFLog(_logbuf);
+        }
       }
     }
 
@@ -544,14 +564,22 @@ namespace OpenBabel {
       #endif
 
       IF_OBFF_LOGLVL_HIGH {
-        snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %8.3f  %8.3f  %8.3f\n", _vdwcalculations[i].a->GetType(), _vdwcalculations[i].b->GetType(),
-                 _vdwcalculations[i].rab, _vdwcalculations[i].kab, _vdwcalculations[i].energy);
-        OBFFLog(_logbuf);
+        #ifdef _OPENMP
+        #pragma omp critical
+        #endif
+        {
+          snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s %8.3f  %8.3f  %8.3f\n", _vdwcalculations[i].a->GetType(), _vdwcalculations[i].b->GetType(),
+                   _vdwcalculations[i].rab, _vdwcalculations[i].kab, _vdwcalculations[i].energy);
+          OBFFLog(_logbuf);
+        }
       }
     }
 
     #ifdef _OPENMP
     for (int i = 0; i < _vdwcalculations.size(); ++i) {
+      if (_cutoff)
+        if (!_vdwpairs.BitIsSet(i))
+          continue;
       if (gradients) {
         AddGradient(_vdwcalculations[i].force_a, _vdwcalculations[i].idx_a);
         AddGradient(_vdwcalculations[i].force_b, _vdwcalculations[i].idx_b);
@@ -633,14 +661,22 @@ namespace OpenBabel {
       #endif
 
       IF_OBFF_LOGLVL_HIGH {
-        snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s   %8.3f  %8.3f  %8.3f\n", _electrostaticcalculations[i].a->GetType(), _electrostaticcalculations[i].b->GetType(),
-                 _electrostaticcalculations[i].rab, _electrostaticcalculations[i].qq, _electrostaticcalculations[i].energy);
-        OBFFLog(_logbuf);
+        #ifdef _OPENMP
+        #pragma omp critical
+        #endif
+        {
+          snprintf(_logbuf, BUFF_SIZE, "%-5s %-5s   %8.3f  %8.3f  %8.3f\n", _electrostaticcalculations[i].a->GetType(), _electrostaticcalculations[i].b->GetType(),
+                   _electrostaticcalculations[i].rab, _electrostaticcalculations[i].qq, _electrostaticcalculations[i].energy);
+          OBFFLog(_logbuf);
+        }
       }
     }
 
     #ifdef _OPENMP
     for (int i = 0; i < _electrostaticcalculations.size(); ++i) {
+      if (_cutoff)
+        if (!_elepairs.BitIsSet(i))
+          continue;
       if (gradients) {
         AddGradient(_electrostaticcalculations[i].force_a, _electrostaticcalculations[i].idx_a);
         AddGradient(_electrostaticcalculations[i].force_b, _electrostaticcalculations[i].idx_b);
