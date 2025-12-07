@@ -590,6 +590,20 @@ public:
 
 #endif // USING_DYNAMIC_LIBS
 
+#if defined(USING_DYNAMIC_LIBS)
+// Forward declarations to ensure built-in charge models remain available even
+// when dynamic plugins are used.
+class GasteigerCharges;
+class MMFF94Charges;
+class NoCharges;
+class FromFileCharges;
+
+OBAPI OB_EXTERN GasteigerCharges theGasteigerCharges;
+OBAPI OB_EXTERN MMFF94Charges theMMFF94Charges;
+OBAPI OB_EXTERN NoCharges theNoCharges;
+OBAPI OB_EXTERN FromFileCharges theFromFileCharges;
+#endif
+
 #endif // SWIG
 
 } // end namespce

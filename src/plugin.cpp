@@ -26,6 +26,18 @@ using namespace std;
 namespace OpenBabel
 {
 
+#if defined(USING_DYNAMIC_LIBS)
+// Ensure core charge models built into the main library remain registered even
+// when dynamic plugin loading is used for other plugin categories.
+static void EnsureBuiltInCharges()
+{
+  reinterpret_cast<OBPlugin*>(&theGasteigerCharges)->GetID();
+  reinterpret_cast<OBPlugin*>(&theMMFF94Charges)->GetID();
+  reinterpret_cast<OBPlugin*>(&theNoCharges)->GetID();
+  reinterpret_cast<OBPlugin*>(&theFromFileCharges)->GetID();
+}
+#endif
+
 OBPlugin::PluginMapType& OBPlugin::GetTypeMap(const char* PluginID)
 {
   PluginMapType::iterator itr;
@@ -47,6 +59,7 @@ void OBPlugin::LoadAllPlugins()
 {
   int count = 0;
 #if  defined(USING_DYNAMIC_LIBS)
+  EnsureBuiltInCharges();
   // Depending on availability, look successively in
   // FORMATFILE_DIR, executable directory or current directory
   string TargetDir;
