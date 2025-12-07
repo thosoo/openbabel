@@ -342,38 +342,50 @@ namespace OpenBabel
 
   bool Kekulizer::BackTrack()
   {
-    // With an odd number of bits, it's never going to kekulize fully, but let's fill in as many as we can
-    unsigned int count = needs_dbl_bond->CountBits();
-
-    unsigned int total_handled = 0;
-    int idx;
-    for (idx = needs_dbl_bond->FirstBit(); idx != needs_dbl_bond->EndBit(); idx = needs_dbl_bond->NextBit(idx)) {
-      total_handled++;
-      // If there is no additional bit available to match this bit, then terminate
-      if (total_handled == count)
-        return false;
-
-      // Our goal is to find an alternating path to another atom
-      // that needs a double bond
-      needs_dbl_bond->SetBitOff(idx); // to avoid the trivial null path being found
-      OBBitVec visited(atomArraySize);
-      m_path.clear();
-      bool found_path = FindPath(idx, false, visited);
-      if (!found_path) { // could only happen if not kekulizable
-        needs_dbl_bond->SetBitOn(idx); // reset
-        continue;
+    // Try to complete kekulization by finding augmenting paths between
+    // unmatched aromatic atoms. The previous implementation bailed out
+    // once it had iterated over as many atoms as originally needed a
+    // double bond, on the assumption that any remaining atoms must be
+    // unmatched (for example because of an odd cardinality). In practice
+    // that termination check can fire simply because iteration order
+    // changes between platforms: the first atom visited might fail to
+    // find a partner, increment the handled counter, and make later
+    // atoms trigger the early return even though a valid alternating path
+    // exists elsewhere. On Windows (MSVC) the neighbor and bond
+    // iterators for a molecule are typically visited in a different order
+    // than on Linux/libstdc++, so the premature return was hit there but
+    // not on Linux. Removing the premature exit ensures every augmenting
+    // path opportunity is explored, trading a handful of extra loop
+    // iterations for eliminating false "not kekulizable" outcomes.
+    while (true) {
+      bool matched = false;
+      int idx;
+      for (idx = needs_dbl_bond->FirstBit(); idx != needs_dbl_bond->EndBit(); idx = needs_dbl_bond->NextBit(idx)) {
+        // Our goal is to find an alternating path to another atom
+        // that needs a double bond
+        needs_dbl_bond->SetBitOff(idx); // to avoid the trivial null path being found
+        OBBitVec visited(atomArraySize);
+        m_path.clear();
+        bool found_path = FindPath(idx, false, visited);
+        if (!found_path) { // could only happen if not kekulizable
+          needs_dbl_bond->SetBitOn(idx); // reset
+          continue;
+        }
+        m_path.push_back(idx);
+        needs_dbl_bond->SetBitOff(m_path[0]);
+        // Flip all of the bond orders on the path from double<-->single
+        for (unsigned int i = 0; i < m_path.size()-1; ++i) {
+          OBBond *bond = m_mol->GetBond(m_path[i], m_path[i + 1]);
+          if (i % 2 == 0)
+            doubleBonds->SetBitOn(bond->GetIdx());
+          else
+            doubleBonds->SetBitOff(bond->GetIdx());
+        }
+        matched = true;
       }
-      total_handled++;
-      m_path.push_back(idx);
-      needs_dbl_bond->SetBitOff(m_path[0]);
-      // Flip all of the bond orders on the path from double<-->single
-      for (unsigned int i = 0; i < m_path.size()-1; ++i) {
-        OBBond *bond = m_mol->GetBond(m_path[i], m_path[i + 1]);
-        if (i % 2 == 0)
-          doubleBonds->SetBitOn(bond->GetIdx());
-        else
-          doubleBonds->SetBitOff(bond->GetIdx());
-      }
+
+      if (!matched)
+        break;
     }
     return needs_dbl_bond->IsEmpty();
   }
