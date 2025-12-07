@@ -11,7 +11,7 @@ set (CMAKE_CXX_STANDARD 11)
 if(COMMAND cmake_policy)
   cmake_policy(SET CMP0003 NEW)
   if(POLICY CMP0042)
-    cmake_policy(SET CMP0042 OLD)
+    cmake_policy(SET CMP0042 NEW)
   endif()
 endif()
 
@@ -547,6 +547,16 @@ if(WITH_COORDGEN)
             message(FATAL_ERROR "Failed getting or unpacking Coordgen '${COORDGEN_VERSION}'.")
           endif()
 
+      endif()
+
+      # Ensure the downloaded Coordgen project declares a minimum CMake version
+      # that is compatible with the version required by this project and
+      # currently supported by CMake.
+      set(COORDGEN_CMAKELISTS "${COORDGEN_DIR}/coordgen/CMakeLists.txt")
+      if(EXISTS "${COORDGEN_CMAKELISTS}")
+        file(READ "${COORDGEN_CMAKELISTS}" COORDGEN_CMAKELISTS_CONTENTS)
+        string(REGEX REPLACE "cmake_minimum_required\\([^\\)]*\\)" "cmake_minimum_required(VERSION 3.5)" COORDGEN_CMAKELISTS_CONTENTS "${COORDGEN_CMAKELISTS_CONTENTS}")
+        file(WRITE "${COORDGEN_CMAKELISTS}" "${COORDGEN_CMAKELISTS_CONTENTS}")
       endif()
 
       add_subdirectory("${COORDGEN_DIR}/coordgen")
