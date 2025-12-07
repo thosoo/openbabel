@@ -357,29 +357,46 @@ namespace OpenBabel
     // not on Linux. Removing the premature exit ensures every augmenting
     // path opportunity is explored, trading a handful of extra loop
     // iterations for eliminating false "not kekulizable" outcomes.
-    int idx;
-    for (idx = needs_dbl_bond->FirstBit(); idx != needs_dbl_bond->EndBit(); idx = needs_dbl_bond->NextBit(idx)) {
-      // Our goal is to find an alternating path to another atom
-      // that needs a double bond
-      needs_dbl_bond->SetBitOff(idx); // to avoid the trivial null path being found
-      OBBitVec visited(atomArraySize);
-      m_path.clear();
-      bool found_path = FindPath(idx, false, visited);
-      if (!found_path) { // could only happen if not kekulizable
-        needs_dbl_bond->SetBitOn(idx); // reset
-        continue;
+
+    // The augmented matching built during a pass over the unmatched atoms
+    // can unlock new paths for atoms visited earlier in that same pass.
+    // Iterate until either all atoms have been matched or an entire pass
+    // fails to add any new double bonds.
+    bool matchedInPass = false;
+    do {
+      matchedInPass = false;
+      std::vector<int> unmatched;
+      for (int idx = needs_dbl_bond->FirstBit(); idx != needs_dbl_bond->EndBit(); idx = needs_dbl_bond->NextBit(idx)) {
+        unmatched.push_back(idx);
       }
-      m_path.push_back(idx);
-      needs_dbl_bond->SetBitOff(m_path[0]);
-      // Flip all of the bond orders on the path from double<-->single
-      for (unsigned int i = 0; i < m_path.size()-1; ++i) {
-        OBBond *bond = m_mol->GetBond(m_path[i], m_path[i + 1]);
-        if (i % 2 == 0)
-          doubleBonds->SetBitOn(bond->GetIdx());
-        else
-          doubleBonds->SetBitOff(bond->GetIdx());
+
+      for (int idx : unmatched) {
+        if (!needs_dbl_bond->BitIsSet(idx))
+          continue;
+        // Our goal is to find an alternating path to another atom
+        // that needs a double bond
+        needs_dbl_bond->SetBitOff(idx); // to avoid the trivial null path being found
+        OBBitVec visited(atomArraySize);
+        m_path.clear();
+        bool found_path = FindPath(idx, false, visited);
+        if (!found_path) { // could only happen if not kekulizable
+          needs_dbl_bond->SetBitOn(idx); // reset
+          continue;
+        }
+        m_path.push_back(idx);
+        needs_dbl_bond->SetBitOff(m_path[0]);
+        // Flip all of the bond orders on the path from double<-->single
+        for (unsigned int i = 0; i < m_path.size()-1; ++i) {
+          OBBond *bond = m_mol->GetBond(m_path[i], m_path[i + 1]);
+          if (i % 2 == 0)
+            doubleBonds->SetBitOn(bond->GetIdx());
+          else
+            doubleBonds->SetBitOff(bond->GetIdx());
+        }
+        matchedInPass = true;
       }
-    }
+    } while (matchedInPass && !needs_dbl_bond->IsEmpty());
+
     return needs_dbl_bond->IsEmpty();
   }
 
