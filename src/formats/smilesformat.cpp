@@ -623,18 +623,21 @@ namespace OpenBabel {
       }
     }
 
-    bool ok = OBKekulize(&mol);
-    if (!ok) {
-      stringstream errorMsg;
-      errorMsg << "Failed to kekulize aromatic SMILES";
-      std::string title = mol.GetTitle();
-      if (!title.empty())
-        errorMsg << " (title is " << title << ")";
-      errorMsg << "; aromatic atoms=" << aromaticAtomCount
-               << ", aromatic bonds=" << aromaticBondCount
-               << " (ring aromatic bonds=" << aromaticRingBondCount << ")" << endl;
-      obErrorLog.ThrowError(__FUNCTION__, errorMsg.str(), obWarning);
-      // return false; // Should we return false for a kekulization failure?
+    bool ok = true;
+    if (aromaticBondCount > 0) {
+      ok = OBKekulize(&mol);
+      if (!ok) {
+        stringstream errorMsg;
+        errorMsg << "Failed to kekulize aromatic SMILES";
+        std::string title = mol.GetTitle();
+        if (!title.empty())
+          errorMsg << " (title is " << title << ")";
+        errorMsg << "; aromatic atoms=" << aromaticAtomCount
+                 << ", aromatic bonds=" << aromaticBondCount
+                 << " (ring aromatic bonds=" << aromaticRingBondCount << ")" << endl;
+        obErrorLog.ThrowError(__FUNCTION__, errorMsg.str(), obWarning);
+        // return false; // Should we return false for a kekulization failure?
+      }
     }
 
     // Add the data stored inside the _tetrahedralMap to the atoms now after end
