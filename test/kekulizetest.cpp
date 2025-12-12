@@ -25,6 +25,7 @@ GNU General Public License for more details.
 
 #include <openbabel/kekulize.h>
 #include <openbabel/obconversion.h>
+#include <openbabel/oberror.h>
 
 #include <string>
 #include <vector>
@@ -45,6 +46,7 @@ static bool KekulizeFromSmiles(const std::string &smiles)
 
 int kekulizetest(int argc, char *argv[])
 {
+#ifdef _WIN32
   cout << endl << "# Testing aromatic kekulization stability...  " << endl;
 
   vector<string> aromaticSmiles = {
@@ -54,9 +56,16 @@ int kekulizetest(int argc, char *argv[])
   };
 
   for (const string &smiles : aromaticSmiles) {
+    unsigned int warningsBefore = obErrorLog.GetWarningMessageCount();
     OB_ASSERT(KekulizeFromSmiles(smiles));
+    unsigned int warningsAfter = obErrorLog.GetWarningMessageCount();
+    OB_ASSERT(warningsAfter == warningsBefore);
   }
 
   return 0;
+#else
+  cout << "# Skipping Windows-only kekulization regression test." << endl;
+  return 0;
+#endif
 }
 

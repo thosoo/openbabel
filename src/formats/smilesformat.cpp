@@ -583,6 +583,21 @@ namespace OpenBabel {
 
     mol.EndModify(false);
 
+    mol.FindRingAtomsAndBonds();
+
+    // Ensure aromatic bonds are marked consistently for aromatic atoms. On some
+    // Windows builds, earlier parsing can leave aromatic atoms connected by
+    // non-aromatic single bonds, which then confuses OBKekulize's aromatic
+    // matching logic. If both atoms are aromatic, mark the bond aromatic so it
+    // can be considered during kekulization.
+    FOR_BONDS_OF_MOL(bond, mol) {
+      if (!bond->IsAromatic() && bond->GetBondOrder() == 1) {
+        if (bond->GetBeginAtom()->IsAromatic() && bond->GetEndAtom()->IsAromatic()) {
+          bond->SetAromatic(true);
+        }
+      }
+    }
+
     // Unset any aromatic bonds that *are not* in rings where the two aromatic atoms *are* in a ring
     // This is rather subtle, but it's correct and reduces the burden of kekulization
     FOR_BONDS_OF_MOL(bond, mol) {
@@ -593,16 +608,36 @@ namespace OpenBabel {
     }
 
     // TODO: Only Kekulize if the molecule has a lower case atom
-    bool ok = OBKekulize(&mol);
-    if (!ok) {
-      stringstream errorMsg;
-      errorMsg << "Failed to kekulize aromatic SMILES";
-      std::string title = mol.GetTitle();
-      if (!title.empty())
-        errorMsg << " (title is " << title << ")";
-      errorMsg << endl;
-      obErrorLog.ThrowError(__FUNCTION__, errorMsg.str(), obWarning);
-      // return false; // Should we return false for a kekulization failure?
+    size_t aromaticAtomCount = 0;
+    size_t aromaticBondCount = 0;
+    size_t aromaticRingBondCount = 0;
+    FOR_ATOMS_OF_MOL(atom, mol) {
+      if (atom->IsAromatic())
+        ++aromaticAtomCount;
+    }
+    FOR_BONDS_OF_MOL(bond, mol) {
+      if (bond->IsAromatic()) {
+        ++aromaticBondCount;
+        if (bond->IsInRing())
+          ++aromaticRingBondCount;
+      }
+    }
+
+    bool ok = true;
+    if (aromaticBondCount > 0) {
+      ok = OBKekulize(&mol);
+      if (!ok) {
+        stringstream errorMsg;
+        errorMsg << "Failed to kekulize aromatic SMILES";
+        std::string title = mol.GetTitle();
+        if (!title.empty())
+          errorMsg << " (title is " << title << ")";
+        errorMsg << "; aromatic atoms=" << aromaticAtomCount
+                 << ", aromatic bonds=" << aromaticBondCount
+                 << " (ring aromatic bonds=" << aromaticRingBondCount << ")" << endl;
+        obErrorLog.ThrowError(__FUNCTION__, errorMsg.str(), obWarning);
+        // return false; // Should we return false for a kekulization failure?
+      }
     }
 
     // Add the data stored inside the _tetrahedralMap to the atoms now after end
