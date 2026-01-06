@@ -698,17 +698,8 @@ void test_SegCopySubstructure()
 
 void test_OrcaVpt2_NaN_Intensities()
 {
-  std::string file = OBTestUtil::GetFilename("orca_vpt2_nan.out");
-  std::ifstream ifs(file.c_str());
-  OB_REQUIRE(ifs.good());
-
-  OBConversion conv;
-  OB_REQUIRE(conv.SetInFormat("orca"));
-
-  OBMol mol;
-  OB_REQUIRE(conv.Read(&mol, &ifs));
-
-  OBGenericData *data = mol.GetData(OBGenericDataType::VibrationData);
+  OBMolPtr mol = OBTestUtil::ReadFile("orca_vpt2_nan.out");
+  OBGenericData *data = mol->GetData(OBGenericDataType::VibrationData);
   OB_REQUIRE(data != nullptr);
 
   OBVibrationData *vib = dynamic_cast<OBVibrationData*>(data);
