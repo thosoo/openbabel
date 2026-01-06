@@ -522,7 +522,8 @@ namespace OpenBabel
             } // while
         } // if "NORMAL MODES"}
 
-        if (checkKeywords.find("IR SPECTRUM") != notFound) {
+        if (checkKeywords.find("IR SPECTRUM") != notFound ||
+            checkKeywords.find("IR Intensities") != notFound) {
 
             Frequencies.resize(0);
             Intensities.resize(0);
