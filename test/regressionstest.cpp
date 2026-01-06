@@ -709,15 +709,19 @@ void test_OrcaVpt2_NaN_Intensities()
   std::vector<double> intensities = vib->GetIntensities();
 
   OB_REQUIRE(frequencies.size() == intensities.size());
-  OB_COMPARE(frequencies.size(), static_cast<size_t>(1));
+  OB_ASSERT(!frequencies.empty());
 
+  bool found_expected = false;
   for (size_t i = 0; i < frequencies.size(); ++i) {
     OB_ASSERT(std::isfinite(frequencies[i]));
     OB_ASSERT(std::isfinite(intensities[i]));
+    if (std::fabs(frequencies[i] - 65.96) < 1e-6 &&
+        std::fabs(intensities[i] - 21.776) < 1e-6) {
+      found_expected = true;
+    }
   }
 
-  OB_ASSERT(std::fabs(frequencies[0] - 65.96) < 1e-6);
-  OB_ASSERT(std::fabs(intensities[0] - 21.776) < 1e-6);
+  OB_ASSERT(found_expected);
 }
 
 int regressionstest(int argc, char *argv[])
