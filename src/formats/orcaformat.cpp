@@ -22,6 +22,8 @@ GNU General Public License for more details.
 #include <openbabel/obiter.h>
 #include <openbabel/elements.h>
 #include <openbabel/generic.h>
+#include <cerrno>
+#include <cmath>
 #include <cstdlib>
 #include <regex>
 /*#ifdef _MSC_VER
@@ -41,6 +43,19 @@ GNU General Public License for more details.
 using namespace std;
 namespace OpenBabel
 {
+  namespace
+  {
+    bool TryParseFiniteDouble(const std::string& text, double& value)
+    {
+      char* end = nullptr;
+      errno = 0;
+      value = std::strtod(text.c_str(), &end);
+      if (end == text.c_str() || errno == ERANGE) {
+        return false;
+      }
+      return std::isfinite(value);
+    }
+  }
 
   class OrcaOutputFormat : public OBMoleculeFormat
   {
@@ -437,7 +452,11 @@ namespace OpenBabel
             tokenize(vs,buffer);
 
             while (vs.size() >1) {
-              tmpFreq = atof(vs[1].c_str());
+              if (!TryParseFiniteDouble(vs[1], tmpFreq)) {
+                ifs.getline(buffer, BUFF_SIZE);
+                tokenize(vs, buffer);
+                continue;
+              }
               if (tmpFreq == 0.0) {
                 skipFreq ++;                  // skip also this line if frequency is zero
               } else {
@@ -503,7 +522,8 @@ namespace OpenBabel
             } // while
         } // if "NORMAL MODES"}
 
-        if (checkKeywords.find("IR SPECTRUM") != notFound) {
+        if (checkKeywords.find("IR SPECTRUM") != notFound ||
+            checkKeywords.find("IR Intensities") != notFound) {
 
             Frequencies.resize(0);
             Intensities.resize(0);
@@ -523,8 +543,13 @@ namespace OpenBabel
             tokenize(vs,str);
 
             while (vs.size() >= 6) {
-                Frequencies.push_back(atof(vs[1].c_str()));
-                Intensities.push_back(atof(vs[2].c_str()));
+                double frequency = 0.0;
+                double intensity = 0.0;
+                if (TryParseFiniteDouble(vs[1], frequency) &&
+                    TryParseFiniteDouble(vs[2], intensity)) {
+                  Frequencies.push_back(frequency);
+                  Intensities.push_back(intensity);
+                }
                 ifs.getline(buffer, BUFF_SIZE);
                 str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
                 str = checkChar (str, '(');  // remove "(" for correct parsing
@@ -551,8 +576,13 @@ namespace OpenBabel
             tokenize(vs,str);
 
             while (vs.size() >= 6) {
-                NearIRFrequencies.push_back(atof(vs[2].c_str()));
-                NearIRIntensities.push_back(atof(vs[3].c_str()));
+                double frequency = 0.0;
+                double intensity = 0.0;
+                if (TryParseFiniteDouble(vs[2], frequency) &&
+                    TryParseFiniteDouble(vs[3], intensity)) {
+                  NearIRFrequencies.push_back(frequency);
+                  NearIRIntensities.push_back(intensity);
+                }
                 ifs.getline(buffer, BUFF_SIZE);
                 str = checkChar (string(buffer), ':');  // remove ":" for correct parsing
                 str = checkChar (str, '(');  // remove "(" for correct parsing

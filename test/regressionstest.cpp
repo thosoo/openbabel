@@ -9,6 +9,7 @@
 #include <openbabel/generic.h>
 #include <openbabel/forcefield.h>
 
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -695,6 +696,34 @@ void test_SegCopySubstructure()
   OB_COMPARE(4, copy.NumBonds());
 }
 
+void test_OrcaVpt2_NaN_Intensities()
+{
+  OBMolPtr mol = OBTestUtil::ReadFile("orca_vpt2_nan.out");
+  OBGenericData *data = mol->GetData(OBGenericDataType::VibrationData);
+  OB_REQUIRE(data != nullptr);
+
+  OBVibrationData *vib = dynamic_cast<OBVibrationData*>(data);
+  OB_REQUIRE(vib != nullptr);
+
+  std::vector<double> frequencies = vib->GetFrequencies();
+  std::vector<double> intensities = vib->GetIntensities();
+
+  OB_REQUIRE(frequencies.size() == intensities.size());
+  OB_ASSERT(!frequencies.empty());
+
+  bool found_expected = false;
+  for (size_t i = 0; i < frequencies.size(); ++i) {
+    OB_ASSERT(std::isfinite(frequencies[i]));
+    OB_ASSERT(std::isfinite(intensities[i]));
+    if (std::fabs(frequencies[i] - 65.96) < 1e-6 &&
+        std::fabs(intensities[i] - 21.776) < 1e-6) {
+      found_expected = true;
+    }
+  }
+
+  OB_ASSERT(found_expected);
+}
+
 int regressionstest(int argc, char *argv[])
 {
   int defaultchoice = 1;
@@ -777,6 +806,9 @@ int regressionstest(int argc, char *argv[])
     break;
   case 2677:
     test_github_issue_2677();
+    break;
+  case 3000:
+    test_OrcaVpt2_NaN_Intensities();
     break;
   // case N:
   //   YOUR_TEST_HERE();
