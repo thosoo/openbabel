@@ -595,11 +595,13 @@ namespace OpenBabel {
     }
 
     // Ensure aromatic bonds are marked consistently for aromatic atoms before
-    // attempting kekulization. Some parser paths can leave single bonds
+    // attempting kekulization. Some parser paths can leave ring single bonds
     // between aromatic atoms non-aromatic, which makes the aromatic graph
     // internally inconsistent and can trigger avoidable kekulization failures.
+    // Restrict this to ring bonds so exocyclic single bonds between aromatic
+    // atoms (e.g., biaryl linkers) are not incorrectly promoted to aromatic.
     FOR_BONDS_OF_MOL(bond, mol) {
-      if (!bond->IsAromatic() && bond->GetBondOrder() == 1 &&
+      if (!bond->IsAromatic() && bond->IsInRing() && bond->GetBondOrder() == 1 &&
           bond->GetBeginAtom()->IsAromatic() && bond->GetEndAtom()->IsAromatic())
         bond->SetAromatic(true);
     }
