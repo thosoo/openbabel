@@ -585,19 +585,6 @@ namespace OpenBabel {
 
     mol.FindRingAtomsAndBonds();
 
-    // Ensure aromatic bonds are marked consistently for aromatic atoms. On some
-    // Windows builds, earlier parsing can leave aromatic atoms connected by
-    // non-aromatic single bonds, which then confuses OBKekulize's aromatic
-    // matching logic. If both atoms are aromatic, mark the bond aromatic so it
-    // can be considered during kekulization.
-    FOR_BONDS_OF_MOL(bond, mol) {
-      if (!bond->IsAromatic() && bond->GetBondOrder() == 1) {
-        if (bond->GetBeginAtom()->IsAromatic() && bond->GetEndAtom()->IsAromatic()) {
-          bond->SetAromatic(true);
-        }
-      }
-    }
-
     // Unset any aromatic bonds that *are not* in rings where the two aromatic atoms *are* in a ring
     // This is rather subtle, but it's correct and reduces the burden of kekulization
     FOR_BONDS_OF_MOL(bond, mol) {
@@ -607,7 +594,16 @@ namespace OpenBabel {
       }
     }
 
-    // TODO: Only Kekulize if the molecule has a lower case atom
+    // Ensure aromatic bonds are marked consistently for aromatic atoms before
+    // attempting kekulization. Some parser paths can leave single bonds
+    // between aromatic atoms non-aromatic, which makes the aromatic graph
+    // internally inconsistent and can trigger avoidable kekulization failures.
+    FOR_BONDS_OF_MOL(bond, mol) {
+      if (!bond->IsAromatic() && bond->GetBondOrder() == 1 &&
+          bond->GetBeginAtom()->IsAromatic() && bond->GetEndAtom()->IsAromatic())
+        bond->SetAromatic(true);
+    }
+
     size_t aromaticAtomCount = 0;
     size_t aromaticBondCount = 0;
     size_t aromaticRingBondCount = 0;
@@ -634,7 +630,26 @@ namespace OpenBabel {
           errorMsg << " (title is " << title << ")";
         errorMsg << "; aromatic atoms=" << aromaticAtomCount
                  << ", aromatic bonds=" << aromaticBondCount
-                 << " (ring aromatic bonds=" << aromaticRingBondCount << ")" << endl;
+                 << " (ring aromatic bonds=" << aromaticRingBondCount << ")";
+
+        errorMsg << "; aromatic atom details:";
+        FOR_ATOMS_OF_MOL(atom, mol) {
+          if (!atom->IsAromatic())
+            continue;
+          errorMsg << " [idx=" << atom->GetIdx()
+                   << ",Z=" << atom->GetAtomicNum()
+                   << ",ring=" << (atom->IsInRing() ? "Y" : "N") << "]";
+        }
+
+        errorMsg << "; bond details:";
+        FOR_BONDS_OF_MOL(bond, mol) {
+          errorMsg << " [idx=" << bond->GetIdx()
+                   << "," << bond->GetBeginAtomIdx() << "-" << bond->GetEndAtomIdx()
+                   << ",bo=" << bond->GetBondOrder()
+                   << ",arom=" << (bond->IsAromatic() ? "Y" : "N")
+                   << ",ring=" << (bond->IsInRing() ? "Y" : "N") << "]";
+        }
+        errorMsg << endl;
         obErrorLog.ThrowError(__FUNCTION__, errorMsg.str(), obWarning);
         // return false; // Should we return false for a kekulization failure?
       }
