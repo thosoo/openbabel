@@ -51,9 +51,13 @@ int charge_gasteiger(int argc, char* argv[])
     // to FORMATDIR when running standalone without a test harness.
     const char* existingLibDir = getenv("BABEL_LIBDIR");
     if (existingLibDir == nullptr || existingLibDir[0] == '\0') {
-      char env[BUFF_SIZE];
-      snprintf(env, BUFF_SIZE, "BABEL_LIBDIR=%s", FORMATDIR);
-      putenv(env);
+      // Avoid putenv() with stack storage (undefined lifetime once this scope
+      // exits), which can make plugin discovery flaky on some platforms.
+#ifdef _WIN32
+      _putenv_s("BABEL_LIBDIR", FORMATDIR);
+#else
+      setenv("BABEL_LIBDIR", FORMATDIR, 1);
+#endif
     }
 #endif
 
