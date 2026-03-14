@@ -48,9 +48,14 @@ int charge_mmff94(int argc, char* argv[])
 
   // Define location of file formats for testing
 #ifdef FORMATDIR
-    char env[BUFF_SIZE];
-    snprintf(env, BUFF_SIZE, "BABEL_LIBDIR=%s", FORMATDIR);
-    putenv(env);
+    // Respect BABEL_LIBDIR provided by the CTest environment. Only fall back
+    // to FORMATDIR when running standalone without a test harness.
+    const char* existingLibDir = getenv("BABEL_LIBDIR");
+    if (existingLibDir == nullptr || existingLibDir[0] == '\0') {
+      char env[BUFF_SIZE];
+      snprintf(env, BUFF_SIZE, "BABEL_LIBDIR=%s", FORMATDIR);
+      putenv(env);
+    }
 #endif
 
   cout << "# Testing MMFF94 Charge Model..." << endl;
