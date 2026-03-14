@@ -104,10 +104,18 @@ OBPlugin* OBPlugin::BaseFindType(PluginMapType& Map, const char* ID)
   if(!ID || !*ID)
     return nullptr;
   PluginMapType::iterator itr = Map.find(ID);
-  if(itr==Map.end())
-    return nullptr;
-  else
-    return itr->second;
+  if(itr==Map.end()) {
+#if defined(USING_DYNAMIC_LIBS)
+    // A previous plugin scan may have partially succeeded (e.g., some plugin
+    // groups load, others temporarily fail). Retry one full scan when a
+    // specific type is missing so late-loadable plugin groups become visible.
+    OBPlugin::LoadAllPlugins();
+    itr = Map.find(ID);
+#endif
+    if(itr==Map.end())
+      return nullptr;
+  }
+  return itr->second;
 }
 
 OBPlugin* OBPlugin::GetPlugin(const char* Type, const char* ID)
