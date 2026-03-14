@@ -12,6 +12,7 @@
 #include <openbabel/mol.h>
 #include <openbabel/obconversion.h>
 #include <openbabel/chargemodel.h>
+#include <openbabel/plugin.h>
 #include <openbabel/obutil.h>
 #include <openbabel/atom.h>
 #include <openbabel/obiter.h>
@@ -95,6 +96,11 @@ int charge_mmff94(int argc, char* argv[])
       }
       
     pCM = OBChargeModel::FindType("mmff94");
+
+    if (pCM == nullptr) {
+      OBPlugin::LoadAllPlugins();
+      pCM = OBChargeModel::FindType("mmff94");
+    }
 
     if (pCM == nullptr) {
       cerr << "Bail out! Cannot load charge model!" << endl;

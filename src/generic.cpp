@@ -1570,6 +1570,18 @@ void OBOrcaSpecData::SetSpecData(const bool & bOrcaSpecData)
 {
   this->_bOrcaSpecData = bOrcaSpecData;
 }
+
+/*!
+**\brief Assign the wavelength and oscillator strength-like data for absorption
+**\param wavelengths Wavelengths in nm
+**\param forces Absorption values (legacy API compatibility)
+*/
+void OBOrcaSpecData::SetData(const std::vector<double> & wavelengths,
+                             const std::vector<double> & forces)
+{
+  this->_vAbsWavelengths = wavelengths;
+  this->_vAbsCombined = forces;
+}
 //    void SetXRayData (const bool &);
 /*!
 **\brief Assign the wavelength data for absorption
