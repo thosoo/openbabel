@@ -56,6 +56,16 @@ int OBPlugin::AllPluginsLoaded = 0;
 
 void OBPlugin::LoadAllPlugins()
 {
+  static bool isLoading = false;
+  if (isLoading)
+    return;
+
+  struct LoadGuard {
+    bool& flag;
+    explicit LoadGuard(bool& f) : flag(f) { flag = true; }
+    ~LoadGuard() { flag = false; }
+  } guard(isLoading);
+
   int count = 0;
 #if  defined(USING_DYNAMIC_LIBS)
   // Depending on availability, look successively in
