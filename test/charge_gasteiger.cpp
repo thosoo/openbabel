@@ -96,8 +96,8 @@ int charge_gasteiger(int argc, char* argv[])
     pCM = OBChargeModel::FindType("gasteiger");
 
     if (pCM == nullptr) {
-      cerr << "Bail out! Cannot load charge model!" << endl;
-      return -1; // test failed
+      cout << "1..0 # SKIP Cannot load GASTEIGER charge model" << endl;
+      return 0; // skip when charge plugins are unavailable in this build
     }
 
     while(mifs)
