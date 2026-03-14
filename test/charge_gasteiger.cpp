@@ -97,6 +97,11 @@ int charge_gasteiger(int argc, char* argv[])
     pCM = OBChargeModel::FindType("gasteiger");
 
     if (pCM == nullptr) {
+#ifdef OB_MODULE_PATH
+      static char fallbackEnv[BUFF_SIZE];
+      snprintf(fallbackEnv, BUFF_SIZE, "BABEL_LIBDIR=%s", OB_MODULE_PATH);
+      putenv(fallbackEnv);
+#endif
       OBPlugin::LoadAllPlugins();
       pCM = OBChargeModel::FindType("gasteiger");
     }
