@@ -669,8 +669,13 @@ H         -0.26065        0.64232       -2.62218
         bonds = list(ob.OBMolBondIter(mol.OBMol))
         self.assertEqual(len(bonds), 9)
 
+    def _skipIfNoPngDepiction(self):
+        if not ob.OBConversion.FindFormat("png"):
+            self.skipTest("PNG depiction support not found (Cairo not enabled)")
+
     def testProper2DofFragments(self):
         """Check for proper handling of fragments in mcdl routines, see issue #1889"""
+        self._skipIfNoPngDepiction()
         mol = pybel.readstring("smi", "[H+].CC[O-].CC[O-]")
         mol.draw(show=False, update=True)
         dists = [
@@ -682,6 +687,7 @@ H         -0.26065        0.64232       -2.62218
 
     def testRegressionBenzene2D(self):
         """Check that benzene is given a correct layout, see #1900"""
+        self._skipIfNoPngDepiction()
         mol = pybel.readstring("smi", "c1ccccc1")
         mol.draw(show=False, update=True)
         benzmol = """
@@ -706,6 +712,7 @@ M  END
 
     def testTemplates(self):
         """Check for regressions to #1851"""
+        self._skipIfNoPngDepiction()
         smis = [
             "O=C(C1=CN=CS1)N1C2CCC1CN(CC1CC3CCC1O3)C2",
             "O=C(CC1CC1)N1C2CCC1CC(NC(=O)C13CCC(CC1)CC3)C2",
