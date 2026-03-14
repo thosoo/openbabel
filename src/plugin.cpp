@@ -35,7 +35,18 @@ OBPlugin::PluginMapType& OBPlugin::GetTypeMap(const char* PluginID)
     OBPlugin::LoadAllPlugins();
   }
 
+  if(PluginID==nullptr || !*PluginID)
+    return PluginMap();
+
   itr = PluginMap().find(PluginID);
+#if defined(USING_DYNAMIC_LIBS)
+  if(itr==PluginMap().end()) {
+    // A first scan can miss some plugin groups if one shared object fails
+    // transiently. Retry one full load before reporting the type unavailable.
+    OBPlugin::LoadAllPlugins();
+    itr = PluginMap().find(PluginID);
+  }
+#endif
   if(itr!=PluginMap().end())
     return itr->second->GetMap();
   return PluginMap();//error: type not found; return plugins map

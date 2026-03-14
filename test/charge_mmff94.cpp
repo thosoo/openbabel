@@ -12,6 +12,7 @@
 #include <openbabel/mol.h>
 #include <openbabel/obconversion.h>
 #include <openbabel/chargemodel.h>
+#include <openbabel/plugin.h>
 #include <openbabel/obutil.h>
 #include <openbabel/atom.h>
 #include <openbabel/obiter.h>
@@ -32,6 +33,32 @@ using namespace OpenBabel;
 #endif
 
 void GenerateMMFF94Charges();
+
+static void PrintChargePluginDebug()
+{
+  const char* libdir = getenv("BABEL_LIBDIR");
+  cerr << "# BABEL_LIBDIR=" << (libdir ? libdir : "<unset>") << '\n';
+
+  vector<string> charges;
+  if (OBPlugin::ListAsVector("charges", "ids", charges) && !charges.empty()) {
+    cerr << "# Loaded charge plugins:";
+    for (vector<string>::const_iterator it = charges.begin(); it != charges.end(); ++it)
+      cerr << ' ' << *it;
+    cerr << '\n';
+    return;
+  }
+
+  vector<string> pluginTypes;
+  OBPlugin::ListAsVector(nullptr, nullptr, pluginTypes);
+  cerr << "# Loaded plugin types:";
+  if(pluginTypes.empty()) {
+    cerr << " <none>";
+  } else {
+    for (vector<string>::const_iterator it = pluginTypes.begin(); it != pluginTypes.end(); ++it)
+      cerr << ' ' << *it;
+  }
+  cerr << '\n';
+}
 
 int charge_mmff94(int argc, char* argv[])
 {
@@ -106,6 +133,7 @@ int charge_mmff94(int argc, char* argv[])
     pCM = OBChargeModel::FindType("mmff94");
 
     if (pCM == nullptr) {
+      PrintChargePluginDebug();
       cerr << "Bail out! Cannot load charge model!" << endl;
       return -1; // test failed
     }
