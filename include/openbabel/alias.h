@@ -15,7 +15,7 @@ GNU General Public License for more details.
 #ifndef OB_ALIAS_H
 #define OB_ALIAS_H
 
-#include <memory>
+#include <openbabel/shared_ptr.h>
 #include <vector>
 #include <openbabel/generic.h>
 
