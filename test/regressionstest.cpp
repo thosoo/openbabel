@@ -8,8 +8,10 @@
 #include <openbabel/bond.h>
 #include <openbabel/generic.h>
 #include <openbabel/forcefield.h>
+#include <openbabel/plugin.h>
 
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -724,6 +726,81 @@ void test_OrcaVpt2_NaN_Intensities()
   OB_ASSERT(found_expected);
 }
 
+void test_SmilesMultiMoleculeRewriteRegression()
+{
+  const std::string filename = "regression_multimol_replace.smi";
+  {
+    std::ofstream ofs(filename.c_str());
+    OB_REQUIRE(ofs.good());
+    ofs << "c1ccccc1 phenyl\n";
+    ofs << "c1ccccc1N aniline\n";
+    ofs << "Cc1ccccc1 toluene\n";
+  }
+
+  OBConversion conv;
+  if (!conv.SetInAndOutFormats("smi", "smi")) {
+    OBPlugin::LoadAllPlugins();
+  }
+  OB_REQUIRE(conv.SetInAndOutFormats("smi", "smi"));
+
+  std::vector<OBMol> mols;
+  {
+    std::ifstream ifs(filename.c_str());
+    OB_REQUIRE(ifs.good());
+    conv.SetInStream(&ifs);
+    for (;;) {
+      OBMol mol;
+      if (!conv.Read(&mol))
+        break;
+      if (mol.Empty())
+        continue;
+      mols.push_back(mol);
+    }
+  }
+
+  OB_REQUIRE(mols.size() == 3);
+  OB_COMPARE(mols[0].NumAtoms(), 6);
+  OB_COMPARE(mols[1].NumAtoms(), 7);
+  OB_COMPARE(mols[2].NumAtoms(), 7);
+  OB_COMPARE(mols[1].GetAtom(7)->GetAtomicNum(), 7);
+  OB_COMPARE(mols[2].GetAtom(7)->GetAtomicNum(), 6);
+
+  // Simulate replacing molecule #2 in a multi-molecule SMILES file.
+  mols[1].NewAtom();
+  mols[1].NewAtom();
+
+  {
+    std::ofstream ofs(filename.c_str());
+    OB_REQUIRE(ofs.good());
+    conv.SetOutStream(&ofs);
+    for (size_t i = 0; i < mols.size(); ++i)
+      OB_REQUIRE(conv.Write(&mols[i]));
+  }
+
+  std::vector<OBMol> reread;
+  {
+    std::ifstream ifs(filename.c_str());
+    OB_REQUIRE(ifs.good());
+    conv.SetInStream(&ifs);
+    for (;;) {
+      OBMol mol;
+      if (!conv.Read(&mol))
+        break;
+      if (mol.Empty())
+        continue;
+      reread.push_back(mol);
+    }
+  }
+
+  OB_REQUIRE(reread.size() == 3);
+  OB_COMPARE(reread[1].NumAtoms(), 9);
+  OB_COMPARE(reread[2].NumAtoms(), 7);
+  OB_COMPARE(reread[1].GetAtom(7)->GetAtomicNum(), 7);
+  OB_COMPARE(reread[2].GetAtom(7)->GetAtomicNum(), 6);
+
+  std::remove(filename.c_str());
+}
+
 int regressionstest(int argc, char *argv[])
 {
   int defaultchoice = 1;
@@ -809,6 +886,9 @@ int regressionstest(int argc, char *argv[])
     break;
   case 3000:
     test_OrcaVpt2_NaN_Intensities();
+    break;
+  case 3100:
+    test_SmilesMultiMoleculeRewriteRegression();
     break;
   // case N:
   //   YOUR_TEST_HERE();
