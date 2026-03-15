@@ -60,6 +60,26 @@ static void PrintChargePluginDebug()
   cerr << '\n';
 }
 
+static bool EnsureSdfFormat(OBConversion& conv)
+{
+  if (conv.SetInAndOutFormats("SDF", "SDF"))
+    return true;
+
+  // Some environments may not have loaded all plugin groups yet.
+  OBPlugin::LoadAllPlugins();
+  return conv.SetInAndOutFormats("SDF", "SDF");
+}
+
+static OBChargeModel* FindChargeModelWithRetry(const char* id)
+{
+  OBChargeModel* model = OBChargeModel::FindType(id);
+  if (model != nullptr)
+    return model;
+
+  OBPlugin::LoadAllPlugins();
+  return OBChargeModel::FindType(id);
+}
+
 int charge_mmff94(int argc, char* argv[])
 {
   int defaultchoice = 1;
@@ -124,13 +144,13 @@ int charge_mmff94(int argc, char* argv[])
 
   switch(choice) {
   case 1:
-    if(! conv.SetInAndOutFormats("SDF","SDF"))
+    if(!EnsureSdfFormat(conv))
       {
         cout << "Bail out! SDF format is not loaded" << endl;
         return -1; // test failed
       }
       
-    pCM = OBChargeModel::FindType("mmff94");
+    pCM = FindChargeModelWithRetry("mmff94");
 
     if (pCM == nullptr) {
       PrintChargePluginDebug();
