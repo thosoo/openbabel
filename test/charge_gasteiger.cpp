@@ -72,12 +72,12 @@ static bool EnsureSdfFormat(OBConversion& conv)
 
 static OBChargeModel* FindChargeModelWithRetry(const char* id)
 {
-  OBChargeModel* model = OBChargeModel::FindType(id);
+  OBChargeModel* model = static_cast<OBChargeModel*>(OBPlugin::GetPlugin("charges", id));
   if (model != nullptr)
     return model;
 
   OBPlugin::LoadAllPlugins();
-  return OBChargeModel::FindType(id);
+  return static_cast<OBChargeModel*>(OBPlugin::GetPlugin("charges", id));
 }
 
 int charge_gasteiger(int argc, char* argv[])
