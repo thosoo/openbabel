@@ -4,17 +4,23 @@ jobs:
   Fuzzing:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
     - name: Build Fuzzers
       id: build
       uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
       with:
         oss-fuzz-project-name: 'openbabel'
+        project-src-path: '${{ github.workspace }}'
         dry-run: false
         language: c++
     - name: Run Fuzzers
       uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
       with:
         oss-fuzz-project-name: 'openbabel'
+        project-src-path: '${{ github.workspace }}'
         fuzz-seconds: 300
         dry-run: false
         language: c++
