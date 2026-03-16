@@ -12,6 +12,7 @@
 #include <openbabel/mol.h>
 #include <openbabel/obconversion.h>
 #include <openbabel/chargemodel.h>
+#include <openbabel/plugin.h>
 #include <openbabel/obutil.h>
 #include <openbabel/atom.h>
 #include <openbabel/obiter.h>
@@ -33,6 +34,52 @@ using namespace OpenBabel;
 
 void GenerateMMFF94Charges();
 
+static void PrintChargePluginDebug()
+{
+  const char* libdir = getenv("BABEL_LIBDIR");
+  cerr << "# BABEL_LIBDIR=" << (libdir ? libdir : "<unset>") << '\n';
+
+  vector<string> charges;
+  if (OBPlugin::ListAsVector("charges", "ids", charges) && !charges.empty()) {
+    cerr << "# Loaded charge plugins:";
+    for (vector<string>::const_iterator it = charges.begin(); it != charges.end(); ++it)
+      cerr << ' ' << *it;
+    cerr << '\n';
+    return;
+  }
+
+  vector<string> pluginTypes;
+  OBPlugin::ListAsVector(nullptr, nullptr, pluginTypes);
+  cerr << "# Loaded plugin types:";
+  if(pluginTypes.empty()) {
+    cerr << " <none>";
+  } else {
+    for (vector<string>::const_iterator it = pluginTypes.begin(); it != pluginTypes.end(); ++it)
+      cerr << ' ' << *it;
+  }
+  cerr << '\n';
+}
+
+static bool EnsureSdfFormat(OBConversion& conv)
+{
+  if (conv.SetInAndOutFormats("SDF", "SDF"))
+    return true;
+
+  // Some environments may not have loaded all plugin groups yet.
+  OBPlugin::LoadAllPlugins();
+  return conv.SetInAndOutFormats("SDF", "SDF");
+}
+
+static OBChargeModel* FindChargeModelWithRetry(const char* id)
+{
+  OBChargeModel* model = static_cast<OBChargeModel*>(OBPlugin::GetPlugin("charges", id));
+  if (model != nullptr)
+    return model;
+
+  OBPlugin::LoadAllPlugins();
+  return static_cast<OBChargeModel*>(OBPlugin::GetPlugin("charges", id));
+}
+
 int charge_mmff94(int argc, char* argv[])
 {
   int defaultchoice = 1;
@@ -48,9 +95,18 @@ int charge_mmff94(int argc, char* argv[])
 
   // Define location of file formats for testing
 #ifdef FORMATDIR
-    char env[BUFF_SIZE];
-    snprintf(env, BUFF_SIZE, "BABEL_LIBDIR=%s", FORMATDIR);
-    putenv(env);
+    // Respect BABEL_LIBDIR provided by the CTest environment. Only fall back
+    // to FORMATDIR when running standalone without a test harness.
+    const char* existingLibDir = getenv("BABEL_LIBDIR");
+    if (existingLibDir == nullptr || existingLibDir[0] == '\0') {
+      // Avoid putenv() with stack storage (undefined lifetime once this scope
+      // exits), which can make plugin discovery flaky on some platforms.
+#ifdef _WIN32
+      _putenv_s("BABEL_LIBDIR", FORMATDIR);
+#else
+      setenv("BABEL_LIBDIR", FORMATDIR, 1);
+#endif
+    }
 #endif
 
   cout << "# Testing MMFF94 Charge Model..." << endl;
@@ -88,15 +144,16 @@ int charge_mmff94(int argc, char* argv[])
 
   switch(choice) {
   case 1:
-    if(! conv.SetInAndOutFormats("SDF","SDF"))
+    if(!EnsureSdfFormat(conv))
       {
         cout << "Bail out! SDF format is not loaded" << endl;
         return -1; // test failed
       }
       
-    pCM = OBChargeModel::FindType("mmff94");
+    pCM = FindChargeModelWithRetry("mmff94");
 
     if (pCM == nullptr) {
+      PrintChargePluginDebug();
       cerr << "Bail out! Cannot load charge model!" << endl;
       return -1; // test failed
     }

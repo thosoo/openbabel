@@ -35,7 +35,18 @@ OBPlugin::PluginMapType& OBPlugin::GetTypeMap(const char* PluginID)
     OBPlugin::LoadAllPlugins();
   }
 
+  if(PluginID==nullptr || !*PluginID)
+    return PluginMap();
+
   itr = PluginMap().find(PluginID);
+#if defined(USING_DYNAMIC_LIBS)
+  if(itr==PluginMap().end()) {
+    // A first scan can miss some plugin groups if one shared object fails
+    // transiently. Retry one full load before reporting the type unavailable.
+    OBPlugin::LoadAllPlugins();
+    itr = PluginMap().find(PluginID);
+  }
+#endif
   if(itr!=PluginMap().end())
     return itr->second->GetMap();
   return PluginMap();//error: type not found; return plugins map
@@ -45,6 +56,16 @@ int OBPlugin::AllPluginsLoaded = 0;
 
 void OBPlugin::LoadAllPlugins()
 {
+  static bool isLoading = false;
+  if (isLoading)
+    return;
+
+  struct LoadGuard {
+    bool& flag;
+    explicit LoadGuard(bool& f) : flag(f) { flag = true; }
+    ~LoadGuard() { flag = false; }
+  } guard(isLoading);
+
   int count = 0;
 #if  defined(USING_DYNAMIC_LIBS)
   // Depending on availability, look successively in
@@ -104,10 +125,18 @@ OBPlugin* OBPlugin::BaseFindType(PluginMapType& Map, const char* ID)
   if(!ID || !*ID)
     return nullptr;
   PluginMapType::iterator itr = Map.find(ID);
-  if(itr==Map.end())
-    return nullptr;
-  else
-    return itr->second;
+  if(itr==Map.end()) {
+#if defined(USING_DYNAMIC_LIBS)
+    // A previous plugin scan may have partially succeeded (e.g., some plugin
+    // groups load, others temporarily fail). Retry one full scan when a
+    // specific type is missing so late-loadable plugin groups become visible.
+    OBPlugin::LoadAllPlugins();
+    itr = Map.find(ID);
+#endif
+    if(itr==Map.end())
+      return nullptr;
+  }
+  return itr->second;
 }
 
 OBPlugin* OBPlugin::GetPlugin(const char* Type, const char* ID)

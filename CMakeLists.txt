@@ -1,9 +1,15 @@
-# Please ensure that any changes remain compliant with 3.1.
+# Please ensure that any changes remain compliant with 3.10.
 if(NOT EMBED_OPENBABEL)
-  cmake_minimum_required(VERSION 3.1)
+  cmake_minimum_required(VERSION 3.10)
 endif()
 
 project(openbabel)
+# Avoid "Manually-specified variables were not used" on CMake versions
+# that do not consume this cache variable natively.
+if(DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+  set(_ob_cmake_policy_version_minimum "${CMAKE_POLICY_VERSION_MINIMUM}")
+endif()
+
 set(CMAKE_MODULE_PATH ${openbabel_SOURCE_DIR}/cmake/modules)
 
 set (CMAKE_CXX_STANDARD 11)
@@ -11,7 +17,13 @@ set (CMAKE_CXX_STANDARD 11)
 if(COMMAND cmake_policy)
   cmake_policy(SET CMP0003 NEW)
   if(POLICY CMP0042)
-    cmake_policy(SET CMP0042 OLD)
+    cmake_policy(SET CMP0042 NEW)
+  endif()
+  if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+  endif()
+  if(POLICY CMP0148)
+    cmake_policy(SET CMP0148 OLD)
   endif()
 endif()
 
