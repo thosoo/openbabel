@@ -10,6 +10,8 @@ jobs:
         fetch-depth: 1
     - name: Build Fuzzers
       id: build
+      env:
+        GITHUB_REF: ${{ github.event.pull_request.head.sha }}
       uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
       with:
         oss-fuzz-project-name: 'openbabel'
@@ -17,6 +19,8 @@ jobs:
         dry-run: false
         language: c++
     - name: Run Fuzzers
+      env:
+        GITHUB_REF: ${{ github.event.pull_request.head.sha }}
       uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
       with:
         oss-fuzz-project-name: 'openbabel'
