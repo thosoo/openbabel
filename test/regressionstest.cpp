@@ -818,6 +818,7 @@ void test_MDLBinaryWriteIsOSInsensitive()
   const std::string filename = "regression_mdl_binary_write.mol";
   obErrorLog.SetOutputLevel(obError); // avoid warning about no 2D or 3D coords
   OB_REQUIRE(conv.WriteFile(&mol, filename));
+  conv.CloseOutFile();
   obErrorLog.SetOutputLevel(obWarning);
 
   std::ifstream ifs(filename.c_str(), std::ios_base::in | std::ios_base::binary);
@@ -844,6 +845,7 @@ void test_SMIBinaryWriteIsOSInsensitive()
 
   const std::string filename = "regression_smi_binary_write.smi";
   OB_REQUIRE(conv.WriteFile(&mol, filename));
+  conv.CloseOutFile();
 
   std::ifstream ifs(filename.c_str(), std::ios_base::in | std::ios_base::binary);
   OB_REQUIRE(ifs.good());
