@@ -801,6 +801,35 @@ void test_SmilesMultiMoleculeRewriteRegression()
   std::remove(filename.c_str());
 }
 
+void test_MDLBinaryWriteIsOSInsensitive()
+{
+  OBConversion conv;
+  OBMol mol;
+  OB_REQUIRE(conv.SetInAndOutFormats("smi", "mol"));
+  OB_REQUIRE(conv.ReadString(&mol, "C([*:1]CO[*:2]"));
+
+  obErrorLog.SetOutputLevel(obError); // avoid warning about no 2D or 3D coords
+  const std::string expected = conv.WriteString(&mol);
+  obErrorLog.SetOutputLevel(obWarning);
+
+  OB_ASSERT(expected.find("M  RGP  2   2   1   5   2") != std::string::npos);
+  OB_ASSERT(expected.find('\r') == std::string::npos);
+
+  const std::string filename = "regression_mdl_binary_write.mol";
+  obErrorLog.SetOutputLevel(obError); // avoid warning about no 2D or 3D coords
+  OB_REQUIRE(conv.WriteFile(&mol, filename));
+  obErrorLog.SetOutputLevel(obWarning);
+
+  std::ifstream ifs(filename.c_str(), std::ios_base::in | std::ios_base::binary);
+  OB_REQUIRE(ifs.good());
+  const std::string actual((std::istreambuf_iterator<char>(ifs)),
+                           std::istreambuf_iterator<char>());
+
+  OB_COMPARE(actual, expected);
+
+  std::remove(filename.c_str());
+}
+
 int regressionstest(int argc, char *argv[])
 {
   int defaultchoice = 1;
@@ -889,6 +918,9 @@ int regressionstest(int argc, char *argv[])
     break;
   case 3100:
     test_SmilesMultiMoleculeRewriteRegression();
+    break;
+  case 3200:
+    test_MDLBinaryWriteIsOSInsensitive();
     break;
   // case N:
   //   YOUR_TEST_HERE();
