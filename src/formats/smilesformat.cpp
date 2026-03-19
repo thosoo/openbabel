@@ -4194,11 +4194,7 @@ namespace OpenBabel {
 
   static const char* NewLine()
   {
-#ifdef _WIN32
-    return "\r\n";
-#else
     return "\n";
-#endif
   }
 
   //////////////////////////////////////////////////

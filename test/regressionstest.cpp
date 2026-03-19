@@ -830,6 +830,31 @@ void test_MDLBinaryWriteIsOSInsensitive()
   std::remove(filename.c_str());
 }
 
+void test_SMIBinaryWriteIsOSInsensitive()
+{
+  OBConversion conv;
+  OBMol mol;
+  OB_REQUIRE(conv.SetInAndOutFormats("smi", "smi"));
+  OB_REQUIRE(conv.ReadString(&mol, "CC"));
+  mol.SetTitle("ethane");
+
+  const std::string expected = conv.WriteString(&mol);
+  OB_ASSERT(expected.find('\r') == std::string::npos);
+  OB_COMPARE(expected, "CC\tethane\n");
+
+  const std::string filename = "regression_smi_binary_write.smi";
+  OB_REQUIRE(conv.WriteFile(&mol, filename));
+
+  std::ifstream ifs(filename.c_str(), std::ios_base::in | std::ios_base::binary);
+  OB_REQUIRE(ifs.good());
+  const std::string actual((std::istreambuf_iterator<char>(ifs)),
+                           std::istreambuf_iterator<char>());
+
+  OB_COMPARE(actual, expected);
+
+  std::remove(filename.c_str());
+}
+
 int regressionstest(int argc, char *argv[])
 {
   int defaultchoice = 1;
@@ -921,6 +946,9 @@ int regressionstest(int argc, char *argv[])
     break;
   case 3200:
     test_MDLBinaryWriteIsOSInsensitive();
+    break;
+  case 3300:
+    test_SMIBinaryWriteIsOSInsensitive();
     break;
   // case N:
   //   YOUR_TEST_HERE();
