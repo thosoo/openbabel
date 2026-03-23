@@ -431,6 +431,7 @@ std::vector<std::string> EnableStaticPlugins()
   plugin_ids.push_back(reinterpret_cast<OBPlugin*>(&theForceFieldMMFF94)->GetID());
   plugin_ids.push_back(reinterpret_cast<OBPlugin*>(&theForceFieldMMFF94s)->GetID());
   plugin_ids.push_back(reinterpret_cast<OBPlugin*>(&theForceFieldUFF)->GetID());
+  plugin_ids.push_back(reinterpret_cast<OBPlugin*>(&theForceFieldUFF4MOF)->GetID());
 
   // operations
   plugin_ids.push_back(reinterpret_cast<OBPlugin*>(&theOpAddInIndex)->GetID());

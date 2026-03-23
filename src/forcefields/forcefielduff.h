@@ -94,6 +94,8 @@ namespace OpenBabel
   protected:
     //!  Parses the parameter file
     bool ParseParamFile() override;
+    //! Return the UFF parameter file list for this force field
+    virtual std::vector<std::string> GetParameterFileNames() const;
     //!  Sets atomtypes to UFF types in _mol
     bool SetTypes() override;
     //!  Fill OBFFXXXCalculation vectors
@@ -105,6 +107,7 @@ namespace OpenBabel
     //!  This is discouraged, since the parameterization is not designed for it
     //!  But if you want, we give you the option.
     bool SetupElectrostatics();
+    void ApplyUFF4MOFTypeOverrides();
     //! Same as OBForceField::GetParameter, but simpler
     OBFFParameter* GetParameterUFF(std::string a, std::vector<OBFFParameter> &parameter);
 
@@ -203,6 +206,29 @@ namespace OpenBabel
     bool ValidateGradients() override;
 
   }; // class OBForceFieldUFF
+
+
+  // UFF4MOF extension based on:
+  // Addicoat et al., J. Chem. Theory Comput. 2014, 10(2), 880-891.
+  // Coupry et al., J. Chem. Theory Comput. 2016, 12(10), 5215-5225.
+  class OBForceFieldUFF4MOF: public OBForceFieldUFF
+  {
+  public:
+    explicit OBForceFieldUFF4MOF(const char* ID, bool IsDefault=true) : OBForceFieldUFF(ID, IsDefault) {}
+
+    OBForceFieldUFF4MOF* MakeNewInstance() override
+    {
+      return new OBForceFieldUFF4MOF(_id, false);
+    }
+
+    const char* Description() override
+    {
+      return "UFF4MOF force field with framework-specific MOF extensions.";
+    }
+
+  protected:
+    std::vector<std::string> GetParameterFileNames() const override;
+  }; // class OBForceFieldUFF4MOF
 
 }// namespace OpenBabel
 

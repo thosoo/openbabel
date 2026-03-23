@@ -55,6 +55,7 @@ set(to_install
     torsion.txt
     types.txt
     UFF.prm
+    UFF4MOF.prm
 )
 
 if(NOT MSVC)

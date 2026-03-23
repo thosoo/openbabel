@@ -548,6 +548,7 @@ public:
   OB_STATIC_PLUGIN(OBForceFieldMMFF94, theForceFieldMMFF94)
   OB_STATIC_PLUGIN(OBForceFieldMMFF94, theForceFieldMMFF94s)
   OB_STATIC_PLUGIN(OBForceFieldUFF, theForceFieldUFF)
+  OB_STATIC_PLUGIN(OBForceFieldUFF4MOF, theForceFieldUFF4MOF)
 
   // operations
   OB_STATIC_PLUGIN(OpAddInIndex, theOpAddInIndex)
