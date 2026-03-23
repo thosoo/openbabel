@@ -107,6 +107,7 @@ namespace OpenBabel
     //!  This is discouraged, since the parameterization is not designed for it
     //!  But if you want, we give you the option.
     bool SetupElectrostatics();
+    void ApplyUFF4MOFTypeOverrides();
     //! Same as OBForceField::GetParameter, but simpler
     OBFFParameter* GetParameterUFF(std::string a, std::vector<OBFFParameter> &parameter);
 

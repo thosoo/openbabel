@@ -45,6 +45,161 @@ using namespace std;
 
 namespace OpenBabel {
 
+  namespace {
+
+    bool IsMetalAtom(OBAtom *atom)
+    {
+      int atomicNum = atom->GetAtomicNum();
+      return atomicNum > 2 && !OBElements::IsNonMetal(atomicNum);
+    }
+
+    double GeometryScore(OBAtom *atom, double tetraAngle, bool squareLike)
+    {
+      std::vector<OBAtom*> nbrs;
+      FOR_NBORS_OF_ATOM(nbr, atom) {
+        nbrs.push_back(&*nbr);
+      }
+      if (nbrs.size() < 2)
+        return 0.0;
+
+      double score = 0.0;
+      int count = 0;
+      for (std::size_t i = 0; i < nbrs.size(); ++i) {
+        for (std::size_t j = i + 1; j < nbrs.size(); ++j) {
+          double angle = nbrs[i]->GetAngle(atom, nbrs[j]);
+          if (squareLike)
+            score += std::min(fabs(angle - 90.0), fabs(angle - 180.0));
+          else
+            score += fabs(angle - tetraAngle);
+          ++count;
+        }
+      }
+      return count ? score / count : 0.0;
+    }
+
+    const char* PreferredUFF4MOFType(int atomicNum, int degree, bool squareLike)
+    {
+      switch (degree) {
+      case 2:
+        switch (atomicNum) {
+        case 25: return "Mn1f1";
+        case 27: return "Co1f1";
+        case 29: return "Cu1f1";
+        case 30: return "Zn1f1";
+        case 47: return "Ag1f1";
+        case 48: return "Cd1f1";
+        case 79: return "Au1f1";
+        }
+        break;
+      case 3:
+        switch (atomicNum) {
+        case 29: return "Cu2f2";
+        case 30: return "Zn2f2";
+        case 47: return "Ag2f2";
+        }
+        break;
+      case 4:
+        if (squareLike) {
+          switch (atomicNum) {
+          case 11: return "Na4f2";
+          case 19: return "K_4f2";
+          case 22: return "Ti4+2";
+          case 23: return "V_4+2";
+          case 24: return "Cr4+2";
+          case 25: return "Mn4+2";
+          case 26: return "Fe4+2";
+          case 27: return "Co4+2";
+          case 29: return "Cu4+2";
+          case 30: return "Zn4+2";
+          case 42: return "Mo4f2";
+          case 43: return "Tc4f2";
+          case 44: return "Ru4f2";
+          case 47: return "Ag4f2";
+          case 48: return "Cd4f2";
+          case 74: return "W_4f2";
+          case 76: return "Os4f2";
+          case 78: return "Pt4f2";
+          case 82: return "Pb4f2";
+          }
+        } else {
+          switch (atomicNum) {
+          case 3: return "Li3f2";
+          case 11: return "Na3f2";
+          case 13: return "Al3f2";
+          case 19: return "K_3f2";
+          case 20: return "Ca3f2";
+          case 23: return "V_3f2";
+          case 25: return "Mn3f2";
+          case 27: return "Co3+2";
+          case 29: return "Cu3f2";
+          case 30: return "Zn3f2";
+          case 31: return "Ga3f2";
+          case 42: return "Mo3f2";
+          case 47: return "Ag3f2";
+          case 48: return "Cd3f2";
+          case 49: return "In3f2";
+          case 74: return "W_3f2";
+          case 80: return "Hg3f2";
+          case 56: return "Ba3f2";
+          }
+        }
+        break;
+      case 6:
+        switch (atomicNum) {
+        case 12: return "Mg6f3";
+        case 13: return "Al6+3";
+        case 21: return "Sc6+3";
+        case 23: return "V_6+3";
+        case 24: return "Cr6f3";
+        case 25: return "Mn6+3";
+        case 26: return "Fe6+3";
+        case 31: return "Ga6f3";
+        case 39: return "Y_6f3";
+        case 46: return "Pd6f3";
+        case 49: return "In6f3";
+        case 63: return "Eu6f3";
+        case 64: return "Gd6f3";
+        case 66: return "Dy6f3";
+        case 70: return "Yb6f3";
+        case 75: return "Re6f3";
+        case 92: return "U_6f3";
+        }
+        break;
+      case 8:
+        switch (atomicNum) {
+        case 25: return "Mn8f4";
+        case 38: return "Sr8f4";
+        case 39: return "Y_8f4";
+        case 40: return "Zr8f4";
+        case 41: return "Nb8f4";
+        case 42: return "Mo8f4";
+        case 48: return "Cd8f4";
+        case 49: return "In8f4";
+        case 57: return "La8f4";
+        case 58: return "Ce8f4";
+        case 59: return "Pr8f4";
+        case 60: return "Nd8f4";
+        case 62: return "Sm8f4";
+        case 63: return "Eu8f4";
+        case 64: return "Gd8f4";
+        case 65: return "Tb8f4";
+        case 66: return "Dy8f4";
+        case 67: return "Ho8f4";
+        case 68: return "Er8f4";
+        case 69: return "Tm8f4";
+        case 70: return "Yb8f4";
+        case 71: return "Lu8f4";
+        case 72: return "Hf8f4";
+        case 74: return "W_8f4";
+        case 92: return "U_8f4";
+        }
+        break;
+      }
+      return nullptr;
+    }
+
+  }
+
   template<bool gradients>
   void OBFFBondCalculationUFF::Compute()
   {
@@ -1839,28 +1994,34 @@ namespace OpenBabel {
 
     _mol.SetAtomTypesPerceived();
 
-    // open data/UFF.prm
-    ifstream ifs;
-    if (OpenDatafile(ifs, "UFF.prm").length() == 0) {
-      obErrorLog.ThrowError(__FUNCTION__, "Cannot open UFF.prm", obError);
-      return false;
-    }
+    std::vector<std::string> parameterFiles = GetParameterFileNames();
+    for (std::vector<std::string>::const_iterator filename = parameterFiles.begin();
+         filename != parameterFiles.end(); ++filename) {
+      ifstream ifs;
+      if (OpenDatafile(ifs, filename->c_str()).length() == 0) {
+        obErrorLog.ThrowError(__FUNCTION__, (std::string("Cannot open ") + *filename).c_str(), obError);
+        return false;
+      }
 
-    while (ifs.getline(buffer, BUFF_SIZE)) {
-      if (EQn(buffer, "atom", 4)) {
-      	tokenize(vs, buffer);
+      while (ifs.getline(buffer, BUFF_SIZE)) {
+        if (EQn(buffer, "atom", 4)) {
+        	tokenize(vs, buffer);
 
-        sp = new OBSmartsPattern;
-        if (sp->Init(vs[1])) {
-          _vexttyp.push_back(pair<OBSmartsPattern*,string> (sp,vs[2]));
-        }
-        else {
-          delete sp;
-          sp = nullptr;
-          obErrorLog.ThrowError(__FUNCTION__, " Could not parse atom type table from UFF.prm", obInfo);
-          return false;
+          sp = new OBSmartsPattern;
+          if (sp->Init(vs[1])) {
+            _vexttyp.push_back(pair<OBSmartsPattern*,string> (sp,vs[2]));
+          }
+          else {
+            delete sp;
+            sp = nullptr;
+            obErrorLog.ThrowError(__FUNCTION__, (std::string(" Could not parse atom type table from ") + *filename).c_str(), obInfo);
+            return false;
+          }
         }
       }
+
+      if (ifs)
+        ifs.close();
     }
 
     for (i = _vexttyp.begin();i != _vexttyp.end();++i) {
@@ -1897,6 +2058,9 @@ namespace OpenBabel {
       }
     }
 
+    if (GetParameterFileNames().size() > 1)
+      ApplyUFF4MOFTypeOverrides();
+
     IF_OBFF_LOGLVL_LOW {
       OBFFLog("\nA T O M   T Y P E S\n\n");
       OBFFLog("IDX\tTYPE\tRING\n");
@@ -1909,9 +2073,6 @@ namespace OpenBabel {
 
     }
 
-    if (ifs)
-      ifs.close();
-
     // Free memory
     for (i = _vexttyp.begin();i != _vexttyp.end();++i) {
       sp = i->first;
@@ -1919,6 +2080,44 @@ namespace OpenBabel {
     }
 
     return true;
+  }
+
+  void OBForceFieldUFF::ApplyUFF4MOFTypeOverrides()
+  {
+    FOR_ATOMS_OF_MOL(a, _mol) {
+      int degree = a->GetExplicitDegree();
+
+      if (a->GetAtomicNum() == OBElements::Oxygen) {
+        bool allMetals = degree > 0;
+        bool allZn = degree == 4;
+        FOR_NBORS_OF_ATOM(nbr, &*a) {
+          allMetals = allMetals && IsMetalAtom(&*nbr);
+          allZn = allZn && (nbr->GetAtomicNum() == OBElements::Zinc);
+        }
+        if (degree == 4 && allZn)
+          a->SetType("O_3_f");
+        else if (degree == 3 && allMetals)
+          a->SetType("O_2_z");
+        continue;
+      }
+
+      if (a->GetAtomicNum() == OBElements::Sulfur && degree >= 2 && degree <= 3 && !a->IsAromatic()) {
+        a->SetType("S_3_f");
+        continue;
+      }
+
+      if (degree < 2)
+        continue;
+
+      bool squareLike = false;
+      if (degree == 4) {
+        squareLike = GeometryScore(&*a, 109.47, true) < GeometryScore(&*a, 109.47, false);
+      }
+
+      const char *preferred = PreferredUFF4MOFType(a->GetAtomicNum(), degree, squareLike);
+      if (preferred)
+        a->SetType(preferred);
+    }
   }
 
   double OBForceFieldUFF::Energy(bool gradients)
