@@ -693,8 +693,9 @@ namespace OpenBabel {
   }
 
   //***********************************************
-  //Make a global instance
+  //Make global instances
   OBForceFieldUFF theForceFieldUFF("UFF", true);
+  OBForceFieldUFF4MOF theForceFieldUFF4MOF("UFF4MOF", false);
   //***********************************************
 
   OBForceFieldUFF::~OBForceFieldUFF()
