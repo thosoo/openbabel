@@ -49,8 +49,7 @@ namespace OpenBabel {
 
     bool IsMetalAtom(OBAtom *atom)
     {
-      int atomicNum = atom->GetAtomicNum();
-      return atomicNum > 2 && !OBElements::IsNonMetal(atomicNum);
+      return atom != nullptr && atom->IsMetal();
     }
 
     double GeometryScore(OBAtom *atom, double tetraAngle, bool squareLike)
@@ -1303,8 +1302,8 @@ namespace OpenBabel {
       }
 
       //double currentTheta;
-      if (coordination > 7) {
-        // large coordination sphere (e.g., [ReH9]-2 or [Ce(NO3)6]-2)
+      if (coordination > 8) {
+        // very large coordination sphere (e.g., [ReH9]-2 or [Ce(NO3)6]-2)
         // just resort to using VDW 1-3 interactions to push atoms into place
         // there's not much else we can do without real parameters
         if (SetupVDWCalculation(a, c, vdwcalc)) {
