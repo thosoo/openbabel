@@ -20,6 +20,7 @@ set(cpptests
   alias automorphism builder canonconsistent canonfragment canonstable carspacegroup cifspacegroup
   cistrans conversion graphsym gzip addh
   implicitH kekulize lssr isomorphism multicml periodic regressions rotor shuffle smiles spectrophore
+  uff4mof
   squareplanar stereo stereoperception tautomer tetrahedral
   tetranonplanar tetraplanar uniqueid
 )
@@ -54,7 +55,7 @@ set(tetrahedral_parts 1 2 3 4 5)
 set(tetranonplanar_parts 1)
 set(tetraplanar_parts 1)
 set(uniqueid_parts 1 2)
-
+set(uff4mof_parts 1)
 if(EIGEN2_FOUND OR EIGEN3_FOUND)
   set(cpptests
     align ${cpptests})
@@ -373,3 +374,4 @@ if(DEFINED ENV{LIB_FUZZING_ENGINE})
   add_executable(fuzz_convert fuzz/fuzz_convert.cpp)
   target_link_libraries(fuzz_convert ${libs} $ENV{LIB_FUZZING_ENGINE})
 endif()
+

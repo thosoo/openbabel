@@ -1723,6 +1723,19 @@ namespace OpenBabel {
     return true;
   }
 
+  std::vector<std::string> OBForceFieldUFF::GetParameterFileNames() const
+  {
+    return std::vector<std::string>(1, "UFF.prm");
+  }
+
+  std::vector<std::string> OBForceFieldUFF4MOF::GetParameterFileNames() const
+  {
+    std::vector<std::string> filenames;
+    filenames.push_back("UFF.prm");
+    filenames.push_back("UFF4MOF.prm");
+    return filenames;
+  }
+
   bool OBForceFieldUFF::ParseParamFile()
   {
     vector<string> vs;
@@ -1730,22 +1743,25 @@ namespace OpenBabel {
 
     OBFFParameter parameter;
 
-    // open data/UFF.prm
-    ifstream ifs;
-    if (OpenDatafile(ifs, "UFF.prm").length() == 0) {
-      obErrorLog.ThrowError(__FUNCTION__, "Cannot open UFF.prm", obError);
-      return false;
-    }
-
     // Set the locale for number parsing to avoid locale issues: PR#1785463
     obLocale.SetLocale();
 
-    while (ifs.getline(buffer, BUFF_SIZE)) {
-      tokenize(vs, buffer);
-      if (vs.size() < 13)
-        continue;
+    std::vector<std::string> parameterFiles = GetParameterFileNames();
+    for (std::vector<std::string>::const_iterator filename = parameterFiles.begin();
+         filename != parameterFiles.end(); ++filename) {
+      ifstream ifs;
+      if (OpenDatafile(ifs, filename->c_str()).length() == 0) {
+        obErrorLog.ThrowError(__FUNCTION__, (std::string("Cannot open ") + *filename).c_str(), obError);
+        obLocale.RestoreLocale();
+        return false;
+      }
 
-      if (EQn(buffer, "param", 5)) {
+      while (ifs.getline(buffer, BUFF_SIZE)) {
+        tokenize(vs, buffer);
+        if (vs.size() < 13)
+          continue;
+
+        if (EQn(buffer, "param", 5)) {
         // set up all parameters from this
         parameter.clear();
         parameter._a = vs[1]; // atom type
@@ -1788,22 +1804,26 @@ namespace OpenBabel {
         case '7': // pentagonal bipyramidal -- not actually in parameterization
           parameter._ipar.push_back(7);
           break;
+        case '8': // cubic antiprismatic / 8-coordinate framework sites
+          parameter._ipar.push_back(8);
+          break;
         default: // general case (unknown coordination)
           // These atoms appear to generally be linear coordination like Cl
           parameter._ipar.push_back(1);
         }
 
-        _ffparams.push_back(parameter);
+          _ffparams.push_back(parameter);
+        }
       }
-    }
 
-    if (ifs)
-      ifs.close();
+      if (ifs)
+        ifs.close();
+    }
 
     // return the locale to the original one
     obLocale.RestoreLocale();
 
-    return 0;
+    return true;
   }
 
   bool OBForceFieldUFF::SetTypes()
