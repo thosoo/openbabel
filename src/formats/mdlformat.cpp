@@ -335,16 +335,27 @@ namespace OpenBabel
     }
 
     auto isLikelyCountsLine = [](const std::string& candidate) -> bool {
-      if (candidate.find("V3000") != std::string::npos
-          || candidate.find("V2000") != std::string::npos) {
-        return true;
-      }
-      if (candidate.size() < 6)
+      if (candidate.size() < 15)
         return false;
 
-      for (size_t i = 0; i < 6; ++i) {
-        const char c = candidate[i];
-        if (!isdigit(static_cast<unsigned char>(c)) && c != ' ')
+      auto isDigitOrSpace = [](char c) {
+        return isdigit(static_cast<unsigned char>(c)) || c == ' ';
+      };
+      for (size_t i = 0; i < 15; ++i) {
+        if (!isDigitOrSpace(candidate[i]))
+          return false;
+      }
+
+      const bool hasAtomCount = candidate[0] != ' ' || candidate[1] != ' ' || candidate[2] != ' ';
+      const bool hasBondCount = candidate[3] != ' ' || candidate[4] != ' ' || candidate[5] != ' ';
+      if (!hasAtomCount || !hasBondCount)
+        return false;
+
+      const string::size_type v3000pos = candidate.find("V3000");
+      const string::size_type v2000pos = candidate.find("V2000");
+      if (v3000pos != string::npos || v2000pos != string::npos) {
+        const string::size_type markerPos = (v3000pos != string::npos) ? v3000pos : v2000pos;
+        if (markerPos < 20)
           return false;
       }
 
