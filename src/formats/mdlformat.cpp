@@ -23,6 +23,7 @@ GNU General Public License for more details.
 #endif
 
 #include <ctime>
+#include <cctype>
 #include <vector>
 #include <iomanip>
 #include <map>
@@ -333,7 +334,24 @@ namespace OpenBabel
       }
     }
 
-    // line 3: comment line
+    auto isLikelyCountsLine = [](const std::string& candidate) -> bool {
+      if (candidate.find("V3000") != std::string::npos
+          || candidate.find("V2000") != std::string::npos) {
+        return true;
+      }
+      if (candidate.size() < 6)
+        return false;
+
+      for (size_t i = 0; i < 6; ++i) {
+        const char c = candidate[i];
+        if (!isdigit(static_cast<unsigned char>(c)) && c != ' ')
+          return false;
+      }
+
+      return true;
+    };
+
+    // line 3: comment line (or, in malformed files, counts line)
     if (!std::getline(ifs, line)) {
       errorMsg << "WARNING: Problems reading a MDL file\n";
       errorMsg << "Cannot read comment line\n";
@@ -341,7 +359,8 @@ namespace OpenBabel
       return false;
     }
 
-    if (!line.empty())
+    const bool missingCommentLine = isLikelyCountsLine(line);
+    if (!line.empty() && !missingCommentLine)
       comment = line;
 
     //
@@ -349,12 +368,14 @@ namespace OpenBabel
     //
 
     // line 1: counts line
-    if (!std::getline(ifs, line)) {
-      errorMsg << "WARNING: Problems reading a MDL file\n";
-      errorMsg << "Cannot read atom and bond count\n";
-      errorMsg << "File ended prematurely\n";
-      obErrorLog.ThrowError(__FUNCTION__, errorMsg.str() , obWarning);
-      return false;
+    if (!missingCommentLine) {
+      if (!std::getline(ifs, line)) {
+        errorMsg << "WARNING: Problems reading a MDL file\n";
+        errorMsg << "Cannot read atom and bond count\n";
+        errorMsg << "File ended prematurely\n";
+        obErrorLog.ThrowError(__FUNCTION__, errorMsg.str() , obWarning);
+        return false;
+      }
     }
     if (line.size() < 6) { // error from Joe Bedell, Sigma-Aldrich
       errorMsg << "WARNING: Problems reading a MDL file\n";

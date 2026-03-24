@@ -857,6 +857,54 @@ void test_SMIBinaryWriteIsOSInsensitive()
   std::remove(filename.c_str());
 }
 
+void test_MDLV3000MissingCommentLine()
+{
+  OBConversion conv;
+  OBMol mol;
+  OB_REQUIRE(conv.SetInFormat("mol"));
+
+  const std::string input = "  ChemDraw03242610232D\n"
+                            "\n"
+                            "  0  0  0     0  0              0 V3000\n"
+                            "M  V30 BEGIN CTAB\n"
+                            "M  V30 COUNTS 12 13 0 0 0\n"
+                            "M  V30 BEGIN ATOM\n"
+                            "M  V30 1 C 1.688959 0.617604 0.000000 0\n"
+                            "M  V30 2 C 1.495886 1.419688 0.000000 0\n"
+                            "M  V30 3 C 0.705261 1.654011 0.000000 0\n"
+                            "M  V30 4 N 0.106563 1.086250 0.000000 0\n"
+                            "M  V30 5 C 0.299063 0.284167 0.000000 0\n"
+                            "M  V30 6 C 1.090261 0.049844 0.000000 0\n"
+                            "M  V30 7 C -0.299063 -0.283594 0.000000 0\n"
+                            "M  V30 8 C -1.090261 -0.049271 0.000000 0\n"
+                            "M  V30 9 C -1.688959 -0.617031 0.000000 0\n"
+                            "M  V30 10 C -1.495886 -1.419688 0.000000 0\n"
+                            "M  V30 11 C -0.705261 -1.654011 0.000000 0\n"
+                            "M  V30 12 C -0.106563 -1.086250 0.000000 0\n"
+                            "M  V30 END ATOM\n"
+                            "M  V30 BEGIN BOND\n"
+                            "M  V30 1 2 1 2\n"
+                            "M  V30 2 1 2 3\n"
+                            "M  V30 3 2 3 4\n"
+                            "M  V30 4 1 4 5\n"
+                            "M  V30 5 2 5 6\n"
+                            "M  V30 6 1 6 1\n"
+                            "M  V30 7 1 5 7\n"
+                            "M  V30 8 2 7 8\n"
+                            "M  V30 9 1 8 9\n"
+                            "M  V30 10 2 9 10\n"
+                            "M  V30 11 1 10 11\n"
+                            "M  V30 12 2 11 12\n"
+                            "M  V30 13 1 12 7\n"
+                            "M  V30 END BOND\n"
+                            "M  V30 END CTAB\n"
+                            "M  END\n";
+
+  OB_REQUIRE(conv.ReadString(&mol, input));
+  OB_COMPARE(mol.NumAtoms(), 12);
+  OB_COMPARE(mol.NumBonds(), 13);
+}
+
 int regressionstest(int argc, char *argv[])
 {
   int defaultchoice = 1;
@@ -951,6 +999,9 @@ int regressionstest(int argc, char *argv[])
     break;
   case 3300:
     test_SMIBinaryWriteIsOSInsensitive();
+    break;
+  case 3400:
+    test_MDLV3000MissingCommentLine();
     break;
   // case N:
   //   YOUR_TEST_HERE();
