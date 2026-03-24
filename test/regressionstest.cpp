@@ -863,7 +863,8 @@ void test_MDLV3000MissingCommentLine()
   OBMol mol;
   OB_REQUIRE(conv.SetInFormat("mol"));
 
-  const std::string input = "  ChemDraw03242610232D\n"
+  const std::string input = "\n"
+                            "ChemDraw03242610232D\n"
                             "\n"
                             "  0  0  0     0  0              0 V3000\n"
                             "M  V30 BEGIN CTAB\n"
