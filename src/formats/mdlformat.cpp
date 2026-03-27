@@ -23,6 +23,7 @@ GNU General Public License for more details.
 #endif
 
 #include <ctime>
+#include <cctype>
 #include <vector>
 #include <iomanip>
 #include <map>
@@ -333,7 +334,35 @@ namespace OpenBabel
       }
     }
 
-    // line 3: comment line
+    auto isLikelyCountsLine = [](const std::string& candidate) -> bool {
+      if (candidate.size() < 15)
+        return false;
+
+      auto isDigitOrSpace = [](char c) {
+        return isdigit(static_cast<unsigned char>(c)) || c == ' ';
+      };
+      for (size_t i = 0; i < 15; ++i) {
+        if (!isDigitOrSpace(candidate[i]))
+          return false;
+      }
+
+      const bool hasAtomCount = candidate[0] != ' ' || candidate[1] != ' ' || candidate[2] != ' ';
+      const bool hasBondCount = candidate[3] != ' ' || candidate[4] != ' ' || candidate[5] != ' ';
+      if (!hasAtomCount || !hasBondCount)
+        return false;
+
+      const string::size_type v3000pos = candidate.find("V3000");
+      const string::size_type v2000pos = candidate.find("V2000");
+      if (v3000pos != string::npos || v2000pos != string::npos) {
+        const string::size_type markerPos = (v3000pos != string::npos) ? v3000pos : v2000pos;
+        if (markerPos < 20)
+          return false;
+      }
+
+      return true;
+    };
+
+    // line 3: comment line (or, in malformed files, counts line)
     if (!std::getline(ifs, line)) {
       errorMsg << "WARNING: Problems reading a MDL file\n";
       errorMsg << "Cannot read comment line\n";
@@ -341,7 +370,8 @@ namespace OpenBabel
       return false;
     }
 
-    if (!line.empty())
+    const bool missingCommentLine = isLikelyCountsLine(line);
+    if (!line.empty() && !missingCommentLine)
       comment = line;
 
     //
@@ -349,12 +379,14 @@ namespace OpenBabel
     //
 
     // line 1: counts line
-    if (!std::getline(ifs, line)) {
-      errorMsg << "WARNING: Problems reading a MDL file\n";
-      errorMsg << "Cannot read atom and bond count\n";
-      errorMsg << "File ended prematurely\n";
-      obErrorLog.ThrowError(__FUNCTION__, errorMsg.str() , obWarning);
-      return false;
+    if (!missingCommentLine) {
+      if (!std::getline(ifs, line)) {
+        errorMsg << "WARNING: Problems reading a MDL file\n";
+        errorMsg << "Cannot read atom and bond count\n";
+        errorMsg << "File ended prematurely\n";
+        obErrorLog.ThrowError(__FUNCTION__, errorMsg.str() , obWarning);
+        return false;
+      }
     }
     if (line.size() < 6) { // error from Joe Bedell, Sigma-Aldrich
       errorMsg << "WARNING: Problems reading a MDL file\n";
