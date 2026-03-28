@@ -522,6 +522,17 @@ const double GAS_CONSTANT = 8.31446261815324e-3 / KCAL_TO_KJ;  //!< kcal mol^-1 
      *  \return true if atom a and b are in the same ring
      */
     bool IsInSameRing(OBAtom* a, OBAtom* b);
+    //! Evaluate energy and true gradient (dE/dx) for quasi-Newton minimizers.
+    double EvaluateQuasiNewtonEnergyAndGradient(std::vector<double> &gradient);
+    //! Zero constrained direction components for quasi-Newton minimizers.
+    void ApplyQuasiNewtonConstraints(std::vector<double> &direction);
+    //! Build steepest-descent fallback direction from a true gradient.
+    void BuildQuasiNewtonSteepestDescentDirection(const std::vector<double> &gradient,
+                                                  std::vector<double> &direction);
+    //! Validate direction and fallback to steepest descent when needed.
+    bool EnsureQuasiNewtonDescentDirection(const std::vector<double> &gradient,
+                                           std::vector<double> &direction,
+                                           bool resetState);
 
     // general variables
     OBMol 	_mol; //!< Molecule to be evaluated or minimized
@@ -543,6 +554,11 @@ const double GAS_CONSTANT = 8.31446261815324e-3 / KCAL_TO_KJ;  //!< kcal mol^-1 
     double 	*_grad1; //!< Used for conjugate gradients and steepest descent(Initialize and TakeNSteps)
     unsigned int _ncoords; //!< Number of coordinates for conjugate gradients
     int         _linesearch; //!< LineSearch type
+    int         _lbfgsHistory; //!< Number of history pairs to store for L-BFGS
+    std::vector<std::vector<double> > _lbfgsSHistory; //!< L-BFGS coordinate differences
+    std::vector<std::vector<double> > _lbfgsYHistory; //!< L-BFGS gradient differences
+    std::vector<double> _lbfgsRhoHistory; //!< 1.0 / dot(y_i, s_i) for L-BFGS
+    std::vector<double> _bfgsHInv; //!< Dense inverse Hessian approximation for BFGS
     // molecular dynamics variables
     double 	_timestep; //!< Molecular dynamics time step in picoseconds
     double 	_temp; //!< Molecular dynamics temperature in Kelvin
@@ -1372,6 +1388,47 @@ const double GAS_CONSTANT = 8.31446261815324e-3 / KCAL_TO_KJ;  //!< kcal mol^-1 
      *  OBFF_LOGLVL_HIGH:   see note above \n
     */
     bool ConjugateGradientsTakeNSteps(int n);
+    /*! Perform BFGS optimalization for steps steps or until convergence criteria is reached.
+     *
+     *  \param steps The number of steps.
+     *  \param econv Energy convergence criteria. (defualt is 1e-6)
+     *  \param method Deprecated. (see HasAnalyticalGradients())
+     */
+    void BFGS(int steps, double econv = 1e-6f, int method = OBFF_ANALYTICAL_GRADIENT);
+    /*! Initialize BFGS optimalization, to be used in combination with BFGSTakeNSteps().
+     *
+     *  \param steps The number of steps.
+     *  \param econv Energy convergence criteria. (defualt is 1e-6)
+     *  \param method Deprecated. (see HasAnalyticalGradients())
+     */
+    void BFGSInitialize(int steps = 1000, double econv = 1e-6f, int method = OBFF_ANALYTICAL_GRADIENT);
+    /*! Take n steps in a BFGS optimalization that was previously initialized with BFGSInitialize().
+     *
+     *  \param n The number of steps to take.
+     *  \return False if convergence or the number of steps given by BFGSInitialize() has been reached.
+     */
+    bool BFGSTakeNSteps(int n);
+    /*! Perform limited-memory BFGS optimalization for steps steps or until convergence criteria is reached.
+     *
+     *  \param steps The number of steps.
+     *  \param econv Energy convergence criteria. (defualt is 1e-6)
+     *  \param method Deprecated. (see HasAnalyticalGradients())
+     */
+    void LBFGS(int steps, double econv = 1e-6f, int method = OBFF_ANALYTICAL_GRADIENT);
+    /*! Initialize limited-memory BFGS optimalization, to be used in combination with LBFGSTakeNSteps().
+     *
+     *  \param steps The number of steps.
+     *  \param econv Energy convergence criteria. (defualt is 1e-6)
+     *  \param method Deprecated. (see HasAnalyticalGradients())
+     *  \param history Number of coordinate/gradient history vectors to retain (default 7).
+     */
+    void LBFGSInitialize(int steps = 1000, double econv = 1e-6f, int method = OBFF_ANALYTICAL_GRADIENT, int history = 7);
+    /*! Take n steps in an L-BFGS optimalization that was previously initialized with LBFGSInitialize().
+     *
+     *  \param n The number of steps to take.
+     *  \return False if convergence or the number of steps given by LBFGSInitialize() has been reached.
+     */
+    bool LBFGSTakeNSteps(int n);
     //@}
 
     /////////////////////////////////////////////////////////////////////////

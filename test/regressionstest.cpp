@@ -9,6 +9,7 @@
 #include <openbabel/generic.h>
 #include <openbabel/forcefield.h>
 #include <openbabel/plugin.h>
+#include <openbabel/builder.h>
 
 #include <cmath>
 #include <cstdio>
@@ -933,6 +934,128 @@ void test_MDLV3000CommentContainsV3000()
   OB_COMPARE(mol.NumBonds(), 1);
 }
 
+void test_LBFGS_Minimizer_Basic()
+{
+  OBMol mol;
+  OBAtom *c1 = mol.NewAtom();
+  OBAtom *c2 = mol.NewAtom();
+  OBAtom *o1 = mol.NewAtom();
+  OB_REQUIRE(c1 != nullptr && c2 != nullptr && o1 != nullptr);
+  c1->SetAtomicNum(6);
+  c2->SetAtomicNum(6);
+  o1->SetAtomicNum(8);
+  OB_REQUIRE(mol.AddBond(c1->GetIdx(), c2->GetIdx(), 1));
+  OB_REQUIRE(mol.AddBond(c2->GetIdx(), o1->GetIdx(), 1));
+
+  OBBuilder builder;
+  OB_REQUIRE(builder.Build(mol, false));
+  OB_REQUIRE(mol.AddHydrogens());
+
+  OBForceField *pFF = OBForceField::FindForceField("MMFF94");
+  if (!pFF) {
+    cerr << "WARNING: no forcefield plugin available, skipping L-BFGS regression test." << endl;
+    return;
+  }
+  pFF->SetLogLevel(OBFF_LOGLVL_NONE);
+
+  OB_REQUIRE(pFF->Setup(mol));
+  const double e0 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+  OBMol molSD = mol;
+  OBForceField *pFFSD = OBForceField::FindForceField("MMFF94");
+  OB_REQUIRE(pFFSD != nullptr);
+  pFFSD->SetLogLevel(OBFF_LOGLVL_NONE);
+  OB_REQUIRE(pFFSD->Setup(molSD));
+  pFFSD->SteepestDescentInitialize(1, 1.0e-8, OBFF_ANALYTICAL_GRADIENT);
+  pFFSD->SteepestDescentTakeNSteps(1);
+  const double e_sd1 = pFFSD->Energy() + pFFSD->GetConstraints().GetConstraintEnergy();
+
+  pFF->LBFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT, 5);
+  pFF->LBFGSTakeNSteps(10);
+  const double e1 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+  OB_ASSERT(isfinite(e1));
+  OB_ASSERT(e1 <= e0 + 1.0e-8);
+  OB_ASSERT(e1 <= e_sd1 + 1.0e-8);
+  OB_ASSERT(!pFF->DetectExplosion());
+
+  OBFFConstraints constraints;
+  constraints.AddAtomConstraint(1);
+  OB_REQUIRE(pFF->Setup(mol, constraints));
+
+  OBAtom *fixed = mol.GetAtom(1);
+  OB_REQUIRE(fixed != nullptr);
+  const vector3 before = fixed->GetVector();
+
+  pFF->LBFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT, 5);
+  pFF->LBFGSTakeNSteps(10);
+  OB_REQUIRE(pFF->GetCoordinates(mol));
+
+  fixed = mol.GetAtom(1);
+  OB_REQUIRE(fixed != nullptr);
+  const vector3 after = fixed->GetVector();
+  OB_ASSERT((after - before).length_2() < 1.0e-12);
+}
+
+void test_BFGS_Minimizer_Basic()
+{
+  OBMol mol;
+  OBAtom *c1 = mol.NewAtom();
+  OBAtom *c2 = mol.NewAtom();
+  OBAtom *o1 = mol.NewAtom();
+  OB_REQUIRE(c1 != nullptr && c2 != nullptr && o1 != nullptr);
+  c1->SetAtomicNum(6);
+  c2->SetAtomicNum(6);
+  o1->SetAtomicNum(8);
+  OB_REQUIRE(mol.AddBond(c1->GetIdx(), c2->GetIdx(), 1));
+  OB_REQUIRE(mol.AddBond(c2->GetIdx(), o1->GetIdx(), 1));
+
+  OBBuilder builder;
+  OB_REQUIRE(builder.Build(mol, false));
+  OB_REQUIRE(mol.AddHydrogens());
+
+  OBForceField *pFF = OBForceField::FindForceField("MMFF94");
+  if (!pFF) {
+    cerr << "WARNING: no forcefield plugin available, skipping BFGS regression test." << endl;
+    return;
+  }
+  pFF->SetLogLevel(OBFF_LOGLVL_NONE);
+
+  OB_REQUIRE(pFF->Setup(mol));
+  const double e0 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+  OBMol molSD = mol;
+  OBForceField *pFFSD = OBForceField::FindForceField("MMFF94");
+  OB_REQUIRE(pFFSD != nullptr);
+  pFFSD->SetLogLevel(OBFF_LOGLVL_NONE);
+  OB_REQUIRE(pFFSD->Setup(molSD));
+  pFFSD->SteepestDescentInitialize(1, 1.0e-8, OBFF_ANALYTICAL_GRADIENT);
+  pFFSD->SteepestDescentTakeNSteps(1);
+  const double e_sd1 = pFFSD->Energy() + pFFSD->GetConstraints().GetConstraintEnergy();
+
+  pFF->BFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT);
+  pFF->BFGSTakeNSteps(10);
+  const double e1 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+  OB_ASSERT(isfinite(e1));
+  OB_ASSERT(e1 <= e0 + 1.0e-8);
+  OB_ASSERT(e1 <= e_sd1 + 1.0e-8);
+  OB_ASSERT(!pFF->DetectExplosion());
+
+  OBFFConstraints constraints;
+  constraints.AddAtomConstraint(1);
+  OB_REQUIRE(pFF->Setup(mol, constraints));
+
+  OBAtom *fixed = mol.GetAtom(1);
+  OB_REQUIRE(fixed != nullptr);
+  const vector3 before = fixed->GetVector();
+
+  pFF->BFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT);
+  pFF->BFGSTakeNSteps(10);
+  OB_REQUIRE(pFF->GetCoordinates(mol));
+
+  fixed = mol.GetAtom(1);
+  OB_REQUIRE(fixed != nullptr);
+  const vector3 after = fixed->GetVector();
+  OB_ASSERT((after - before).length_2() < 1.0e-12);
+}
+
 int regressionstest(int argc, char *argv[])
 {
   int defaultchoice = 1;
@@ -1033,6 +1156,12 @@ int regressionstest(int argc, char *argv[])
     break;
   case 3410:
     test_MDLV3000CommentContainsV3000();
+    break;
+  case 3420:
+    test_LBFGS_Minimizer_Basic();
+    break;
+  case 3430:
+    test_BFGS_Minimizer_Basic();
     break;
   // case N:
   //   YOUR_TEST_HERE();

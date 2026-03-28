@@ -19,6 +19,9 @@ GNU General Public License for more details.
 ***********************************************************************/
 #include <openbabel/babelconfig.h>
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <set>
 
 #include <openbabel/forcefield.h>
@@ -817,6 +820,11 @@ namespace OpenBabel
       _velocityPtr = nullptr;
       _gradientPtr = nullptr;
       _grad1 = nullptr;
+      _lbfgsHistory = 7;
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
+      _bfgsHInv.clear();
     }
 
     if (IsSetupNeeded(mol)) {
@@ -828,6 +836,10 @@ namespace OpenBabel
 
       delete [] _gradientPtr;
       _gradientPtr = new double[_ncoords];
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
+      _bfgsHInv.clear();
 
       if (_mol.NumAtoms() && _constraints.Size())
         _constraints.Setup(_mol);
@@ -871,6 +883,12 @@ namespace OpenBabel
       _init = true;
       _velocityPtr = nullptr;
       _gradientPtr = nullptr;
+      _grad1 = nullptr;
+      _lbfgsHistory = 7;
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
+      _bfgsHInv.clear();
     }
 
     if (IsSetupNeeded(mol)) {
@@ -882,6 +900,10 @@ namespace OpenBabel
 
       delete [] _gradientPtr;
       _gradientPtr = new double[_ncoords];
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
+      _bfgsHInv.clear();
 
       _constraints = constraints;
       if (_mol.NumAtoms() && _constraints.Size())
@@ -2748,7 +2770,8 @@ namespace OpenBabel
     if (_cutoff)
       UpdatePairsSimple(); // Update the non-bonded pairs (Cut-off)
 
-    _e_n1 = Energy() + _constraints.GetConstraintEnergy();
+    vector<double> gradient;
+    _e_n1 = EvaluateQuasiNewtonEnergyAndGradient(gradient);
 
     IF_OBFF_LOGLVL_LOW {
       OBFFLog("\nS T E E P E S T   D E S C E N T\n\n");
@@ -3067,6 +3090,490 @@ namespace OpenBabel
     ConjugateGradientsInitialize(steps, econv, method);
     if (steps > 1) // ConjugateGradientsInitialize takes the first step
       ConjugateGradientsTakeNSteps(steps);
+  }
+
+  namespace
+  {
+    inline bool IsFiniteVector(const vector<double> &v)
+    {
+      for (size_t i = 0; i < v.size(); ++i) {
+        if (!isfinite(v[i]))
+          return false;
+      }
+      return true;
+    }
+
+    inline double DotProduct(const vector<double> &a, const vector<double> &b)
+    {
+      double sum = 0.0;
+      for (size_t i = 0; i < a.size(); ++i)
+        sum += a[i] * b[i];
+      return sum;
+    }
+
+    inline double InfinityNorm(const vector<double> &v)
+    {
+      double maxval = 0.0;
+      for (size_t i = 0; i < v.size(); ++i) {
+        const double value = fabs(v[i]);
+        if (value > maxval)
+          maxval = value;
+      }
+      return maxval;
+    }
+
+    inline double Norm2(const vector<double> &v)
+    {
+      return DotProduct(v, v);
+    }
+
+    inline bool QuasiNewtonConverged(double e_n2, double e_n1, double econv,
+                                     const vector<double> &gradient, double gconv)
+    {
+      const double gradInf = InfinityNorm(gradient);
+      return IsNear(e_n2, e_n1, econv) && (gradInf * gradInf < gconv);
+    }
+  }
+
+  double OBForceField::EvaluateQuasiNewtonEnergyAndGradient(vector<double> &gradient)
+  {
+    gradient.assign(_ncoords, 0.0);
+    double energy = 0.0;
+
+    if (HasAnalyticalGradients()) {
+      // Ensure analytical gradients in _gradientPtr are fresh for current coordinates.
+      energy = Energy(true) + _constraints.GetConstraintEnergy();
+
+      FOR_ATOMS_OF_MOL (a, _mol) {
+        const unsigned int idx = a->GetIdx();
+        const unsigned int coordIdx = (idx - 1) * 3;
+
+        if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx))
+          continue;
+
+        const vector3 constraintForce = _constraints.GetGradient(a->GetIdx());
+        if (!_constraints.IsXFixed(idx))
+          gradient[coordIdx] = -(_gradientPtr[coordIdx] + constraintForce.x());
+        if (!_constraints.IsYFixed(idx))
+          gradient[coordIdx+1] = -(_gradientPtr[coordIdx+1] + constraintForce.y());
+        if (!_constraints.IsZFixed(idx))
+          gradient[coordIdx+2] = -(_gradientPtr[coordIdx+2] + constraintForce.z());
+      }
+      return energy;
+    }
+
+    energy = Energy(false) + _constraints.GetConstraintEnergy();
+
+    FOR_ATOMS_OF_MOL (a, _mol) {
+      const unsigned int idx = a->GetIdx();
+      const unsigned int coordIdx = (idx - 1) * 3;
+
+      if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx))
+        continue;
+
+      const vector3 force = NumericalDerivative(&*a) + _constraints.GetGradient(a->GetIdx());
+
+      if (!_constraints.IsXFixed(idx))
+        gradient[coordIdx] = -force.x();
+      if (!_constraints.IsYFixed(idx))
+        gradient[coordIdx+1] = -force.y();
+      if (!_constraints.IsZFixed(idx))
+        gradient[coordIdx+2] = -force.z();
+    }
+
+    return energy;
+  }
+
+  void OBForceField::ApplyQuasiNewtonConstraints(vector<double> &direction)
+  {
+    FOR_ATOMS_OF_MOL (a, _mol) {
+      const unsigned int idx = a->GetIdx();
+      const unsigned int coordIdx = (idx - 1) * 3;
+
+      if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx)) {
+        direction[coordIdx] = 0.0;
+        direction[coordIdx+1] = 0.0;
+        direction[coordIdx+2] = 0.0;
+        continue;
+      }
+
+      if (_constraints.IsXFixed(idx))
+        direction[coordIdx] = 0.0;
+      if (_constraints.IsYFixed(idx))
+        direction[coordIdx+1] = 0.0;
+      if (_constraints.IsZFixed(idx))
+        direction[coordIdx+2] = 0.0;
+    }
+  }
+
+  void OBForceField::BuildQuasiNewtonSteepestDescentDirection(const vector<double> &gradient,
+                                                              vector<double> &direction)
+  {
+    direction.resize(_ncoords);
+    for (unsigned int c = 0; c < _ncoords; ++c)
+      direction[c] = -gradient[c];
+    ApplyQuasiNewtonConstraints(direction);
+  }
+
+  bool OBForceField::EnsureQuasiNewtonDescentDirection(const vector<double> &gradient,
+                                                       vector<double> &direction,
+                                                       bool resetState)
+  {
+    ApplyQuasiNewtonConstraints(direction);
+    bool validDirection = IsFiniteVector(direction);
+    double directionalDerivative = 0.0;
+    if (validDirection)
+      directionalDerivative = DotProduct(gradient, direction);
+
+    if (!validDirection || !(directionalDerivative < 0.0)) {
+      BuildQuasiNewtonSteepestDescentDirection(gradient, direction);
+      if (resetState) {
+        _lbfgsSHistory.clear();
+        _lbfgsYHistory.clear();
+        _lbfgsRhoHistory.clear();
+        _bfgsHInv.clear();
+      }
+    }
+
+    return IsFiniteVector(direction);
+  }
+
+  void OBForceField::BFGSInitialize(int steps, double econv, int method)
+  {
+    if (!_validSetup || steps == 0)
+      return;
+
+    _cstep = 0;
+    _nsteps = steps;
+    _econv = econv;
+    _gconv = 1.0e-2; // gradient convergence (0.1) squared
+    _ncoords = _mol.NumAtoms() * 3;
+    _bfgsHInv.assign(_ncoords * _ncoords, 0.0);
+    for (unsigned int c = 0; c < _ncoords; ++c)
+      _bfgsHInv[c * _ncoords + c] = 1.0;
+    _lbfgsSHistory.clear();
+    _lbfgsYHistory.clear();
+    _lbfgsRhoHistory.clear();
+
+    if (_cutoff)
+      UpdatePairsSimple(); // Update the non-bonded pairs (Cut-off)
+
+    vector<double> gradient;
+    _e_n1 = EvaluateQuasiNewtonEnergyAndGradient(gradient);
+
+    IF_OBFF_LOGLVL_LOW {
+      OBFFLog("\nB F G S   M I N I M I Z A T I O N\n\n");
+      snprintf(_logbuf, BUFF_SIZE, "STEPS = %d\n\n",  steps);
+      OBFFLog(_logbuf);
+      OBFFLog("STEP n     E(n)       E(n-1)    \n");
+      OBFFLog("--------------------------------\n");
+      snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f      ----\n", _cstep, _e_n1);
+      OBFFLog(_logbuf);
+    }
+  }
+
+  bool OBForceField::BFGSTakeNSteps(int n)
+  {
+    if (!_validSetup)
+      return false;
+
+    if (_ncoords != _mol.NumAtoms() * 3)
+      return false;
+
+    const double curvatureEps = 1.0e-12;
+
+    for (int i = 1; i <= n; ++i) {
+      _cstep++;
+      vector<double> grad;
+      const double e_n1_current = EvaluateQuasiNewtonEnergyAndGradient(grad);
+      if (!IsFiniteVector(grad))
+        return false;
+      _e_n1 = e_n1_current;
+
+      if (_bfgsHInv.size() != _ncoords * _ncoords) {
+        _bfgsHInv.assign(_ncoords * _ncoords, 0.0);
+        for (unsigned int c = 0; c < _ncoords; ++c)
+          _bfgsHInv[c * _ncoords + c] = 1.0;
+      }
+
+      vector<double> direction(_ncoords, 0.0);
+      for (unsigned int row = 0; row < _ncoords; ++row) {
+        double Hg = 0.0;
+        const unsigned int rowOffset = row * _ncoords;
+        for (unsigned int col = 0; col < _ncoords; ++col)
+          Hg += _bfgsHInv[rowOffset + col] * grad[col];
+        direction[row] = -Hg;
+      }
+
+      if (!EnsureQuasiNewtonDescentDirection(grad, direction, true))
+        return false;
+
+      if (Norm2(direction) < 1.0e-24)
+        return false; // no movable degrees of freedom or no direction left after masking
+
+      for (unsigned int c = 0; c < _ncoords; ++c)
+        _gradientPtr[c] = direction[c];
+
+      const vector<double> x_old(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
+      const vector<double> g_old = grad;
+
+      switch (_linesearch) {
+      case LineSearchType::Newton2Num:
+        Newton2NumLineSearch(&direction[0]);
+        break;
+      default:
+      case LineSearchType::Simple:
+        LineSearch(_mol.GetCoordinates(), &direction[0]);
+        break;
+      }
+
+      vector<double> g_new;
+      const double e_n2 = EvaluateQuasiNewtonEnergyAndGradient(g_new);
+      if (!IsFiniteVector(g_new))
+        return false;
+
+      const vector<double> x_new(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
+      vector<double> s(_ncoords, 0.0);
+      vector<double> y(_ncoords, 0.0);
+      for (unsigned int c = 0; c < _ncoords; ++c) {
+        s[c] = x_new[c] - x_old[c];
+        y[c] = g_new[c] - g_old[c];
+      }
+
+      const double ys = DotProduct(y, s);
+      if (isfinite(ys) && (ys > curvatureEps)) {
+        vector<double> Hy(_ncoords, 0.0);
+        for (unsigned int row = 0; row < _ncoords; ++row) {
+          const unsigned int rowOffset = row * _ncoords;
+          for (unsigned int col = 0; col < _ncoords; ++col)
+            Hy[row] += _bfgsHInv[rowOffset + col] * y[col];
+        }
+        const double yHy = DotProduct(y, Hy);
+        if (!isfinite(yHy)) {
+          _bfgsHInv.clear();
+        } else {
+          const double inv_ys = 1.0 / ys;
+          const double s_scale = (ys + yHy) * inv_ys * inv_ys;
+          for (unsigned int row = 0; row < _ncoords; ++row) {
+            const unsigned int rowOffset = row * _ncoords;
+            for (unsigned int col = 0; col < _ncoords; ++col) {
+              _bfgsHInv[rowOffset + col] += s_scale * s[row] * s[col]
+                - inv_ys * (Hy[row] * s[col] + s[row] * Hy[col]);
+            }
+          }
+        }
+      } else {
+        _bfgsHInv.clear();
+      }
+
+      if ((_cstep % _pairfreq == 0) && _cutoff)
+        UpdatePairsSimple();
+
+      IF_OBFF_LOGLVL_LOW {
+        if (_cstep % 10 == 0) {
+          snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f    %8.3f\n", _cstep, e_n2, _e_n1);
+          OBFFLog(_logbuf);
+        }
+      }
+
+      if (QuasiNewtonConverged(e_n2, _e_n1, _econv, g_new, _gconv)) {
+        IF_OBFF_LOGLVL_LOW {
+          snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f    %8.3f\n", _cstep, e_n2, _e_n1);
+          OBFFLog(_logbuf);
+          OBFFLog("    BFGS HAS CONVERGED\n");
+        }
+        _e_n1 = e_n2;
+        return false;
+      }
+
+      _e_n1 = e_n2;
+      if (_nsteps == _cstep)
+        return false;
+    }
+
+    return true;
+  }
+
+  void OBForceField::BFGS(int steps, double econv, int method)
+  {
+    if (steps <= 0)
+      return;
+
+    BFGSInitialize(steps, econv, method);
+    BFGSTakeNSteps(steps);
+  }
+
+  void OBForceField::LBFGSInitialize(int steps, double econv, int method, int history)
+  {
+    if (!_validSetup || steps == 0)
+      return;
+
+    _cstep = 0;
+    _nsteps = steps;
+    _econv = econv;
+    _gconv = 1.0e-2; // gradient convergence (0.1) squared
+    _ncoords = _mol.NumAtoms() * 3;
+    _lbfgsHistory = std::max(1, history);
+    _lbfgsSHistory.clear();
+    _lbfgsYHistory.clear();
+    _lbfgsRhoHistory.clear();
+    _bfgsHInv.clear();
+
+    if (_cutoff)
+      UpdatePairsSimple(); // Update the non-bonded pairs (Cut-off)
+
+    vector<double> gradient;
+    _e_n1 = EvaluateQuasiNewtonEnergyAndGradient(gradient);
+
+    IF_OBFF_LOGLVL_LOW {
+      OBFFLog("\nL - B F G S   M I N I M I Z A T I O N\n\n");
+      snprintf(_logbuf, BUFF_SIZE, "STEPS = %d  HISTORY = %d\n\n",  steps, _lbfgsHistory);
+      OBFFLog(_logbuf);
+      OBFFLog("STEP n     E(n)       E(n-1)    \n");
+      OBFFLog("--------------------------------\n");
+      snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f      ----\n", _cstep, _e_n1);
+      OBFFLog(_logbuf);
+    }
+  }
+
+  bool OBForceField::LBFGSTakeNSteps(int n)
+  {
+    if (!_validSetup)
+      return false;
+
+    if (_ncoords != _mol.NumAtoms() * 3)
+      return false;
+
+    const double curvatureEps = 1.0e-12;
+
+    for (int i = 1; i <= n; ++i) {
+      _cstep++;
+      vector<double> grad;
+      const double e_n1_current = EvaluateQuasiNewtonEnergyAndGradient(grad);
+      if (!IsFiniteVector(grad))
+        return false;
+      _e_n1 = e_n1_current;
+
+      vector<double> direction(_ncoords, 0.0);
+      const size_t m = _lbfgsRhoHistory.size();
+      if (m == 0) {
+        BuildQuasiNewtonSteepestDescentDirection(grad, direction);
+      } else {
+        vector<double> q = grad;
+        vector<double> alpha(m, 0.0);
+
+        for (size_t rev = 0; rev < m; ++rev) {
+          const size_t j = m - 1 - rev;
+          alpha[j] = _lbfgsRhoHistory[j] * DotProduct(_lbfgsSHistory[j], q);
+          for (unsigned int c = 0; c < _ncoords; ++c)
+            q[c] -= alpha[j] * _lbfgsYHistory[j][c];
+        }
+
+        double gamma = 1.0;
+        const double ys = DotProduct(_lbfgsYHistory[m-1], _lbfgsSHistory[m-1]);
+        const double yy = DotProduct(_lbfgsYHistory[m-1], _lbfgsYHistory[m-1]);
+        if (fabs(yy) > curvatureEps && isfinite(ys / yy))
+          gamma = ys / yy;
+
+        vector<double> r(_ncoords, 0.0);
+        for (unsigned int c = 0; c < _ncoords; ++c)
+          r[c] = gamma * q[c];
+
+        for (size_t j = 0; j < m; ++j) {
+          const double beta = _lbfgsRhoHistory[j] * DotProduct(_lbfgsYHistory[j], r);
+          for (unsigned int c = 0; c < _ncoords; ++c)
+            r[c] += _lbfgsSHistory[j][c] * (alpha[j] - beta);
+        }
+
+        for (unsigned int c = 0; c < _ncoords; ++c)
+          direction[c] = -r[c];
+      }
+
+      if (!EnsureQuasiNewtonDescentDirection(grad, direction, true))
+        return false;
+      if (Norm2(direction) < 1.0e-24)
+        return false; // no movable degrees of freedom or no direction left after masking
+
+      for (unsigned int c = 0; c < _ncoords; ++c)
+        _gradientPtr[c] = direction[c];
+
+      const vector<double> x_old(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
+      const vector<double> g_old = grad;
+
+      switch (_linesearch) {
+      case LineSearchType::Newton2Num:
+        Newton2NumLineSearch(&direction[0]);
+        break;
+      default:
+      case LineSearchType::Simple:
+        LineSearch(_mol.GetCoordinates(), &direction[0]);
+        break;
+      }
+
+      vector<double> g_new;
+      const double e_n2 = EvaluateQuasiNewtonEnergyAndGradient(g_new);
+      if (!IsFiniteVector(g_new))
+        return false;
+
+      const vector<double> x_new(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
+      vector<double> s(_ncoords, 0.0);
+      vector<double> y(_ncoords, 0.0);
+      for (unsigned int c = 0; c < _ncoords; ++c) {
+        s[c] = x_new[c] - x_old[c];
+        y[c] = g_new[c] - g_old[c];
+      }
+
+      const double ys = DotProduct(y, s);
+      if (isfinite(ys) && (ys > curvatureEps)) {
+        if (static_cast<int>(_lbfgsSHistory.size()) == _lbfgsHistory) {
+          _lbfgsSHistory.erase(_lbfgsSHistory.begin());
+          _lbfgsYHistory.erase(_lbfgsYHistory.begin());
+          _lbfgsRhoHistory.erase(_lbfgsRhoHistory.begin());
+        }
+        _lbfgsSHistory.push_back(s);
+        _lbfgsYHistory.push_back(y);
+        _lbfgsRhoHistory.push_back(1.0 / ys);
+      } else {
+        _lbfgsSHistory.clear();
+        _lbfgsYHistory.clear();
+        _lbfgsRhoHistory.clear();
+      }
+
+      if ((_cstep % _pairfreq == 0) && _cutoff)
+        UpdatePairsSimple();
+
+      IF_OBFF_LOGLVL_LOW {
+        if (_cstep % 10 == 0) {
+          snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f    %8.3f\n", _cstep, e_n2, _e_n1);
+          OBFFLog(_logbuf);
+        }
+      }
+
+      if (QuasiNewtonConverged(e_n2, _e_n1, _econv, g_new, _gconv)) {
+        IF_OBFF_LOGLVL_LOW {
+          snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f    %8.3f\n", _cstep, e_n2, _e_n1);
+          OBFFLog(_logbuf);
+          OBFFLog("    L-BFGS HAS CONVERGED\n");
+        }
+        _e_n1 = e_n2;
+        return false;
+      }
+
+      _e_n1 = e_n2;
+      if (_nsteps == _cstep)
+        return false;
+    }
+
+    return true;
+  }
+
+  void OBForceField::LBFGS(int steps, double econv, int method)
+  {
+    if (steps <= 0)
+      return;
+
+    LBFGSInitialize(steps, econv, method);
+    LBFGSTakeNSteps(steps);
   }
 
   //
