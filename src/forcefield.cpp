@@ -821,8 +821,6 @@ namespace OpenBabel
       _gradientPtr = nullptr;
       _grad1 = nullptr;
       _lbfgsHistory = 7;
-      _lbfgsPrevCoords.clear();
-      _lbfgsPrevGrad.clear();
       _lbfgsSHistory.clear();
       _lbfgsYHistory.clear();
       _lbfgsRhoHistory.clear();
@@ -838,8 +836,6 @@ namespace OpenBabel
 
       delete [] _gradientPtr;
       _gradientPtr = new double[_ncoords];
-      _lbfgsPrevCoords.clear();
-      _lbfgsPrevGrad.clear();
       _lbfgsSHistory.clear();
       _lbfgsYHistory.clear();
       _lbfgsRhoHistory.clear();
@@ -889,8 +885,6 @@ namespace OpenBabel
       _gradientPtr = nullptr;
       _grad1 = nullptr;
       _lbfgsHistory = 7;
-      _lbfgsPrevCoords.clear();
-      _lbfgsPrevGrad.clear();
       _lbfgsSHistory.clear();
       _lbfgsYHistory.clear();
       _lbfgsRhoHistory.clear();
@@ -906,8 +900,6 @@ namespace OpenBabel
 
       delete [] _gradientPtr;
       _gradientPtr = new double[_ncoords];
-      _lbfgsPrevCoords.clear();
-      _lbfgsPrevGrad.clear();
       _lbfgsSHistory.clear();
       _lbfgsYHistory.clear();
       _lbfgsRhoHistory.clear();
@@ -2778,7 +2770,8 @@ namespace OpenBabel
     if (_cutoff)
       UpdatePairsSimple(); // Update the non-bonded pairs (Cut-off)
 
-    _e_n1 = Energy() + _constraints.GetConstraintEnergy();
+    vector<double> gradient;
+    _e_n1 = EvaluateQuasiNewtonEnergyAndGradient(gradient);
 
     IF_OBFF_LOGLVL_LOW {
       OBFFLog("\nS T E E P E S T   D E S C E N T\n\n");
@@ -3142,9 +3135,34 @@ namespace OpenBabel
     }
   }
 
-  void OBForceField::BuildQuasiNewtonGradient(vector<double> &gradient)
+  double OBForceField::EvaluateQuasiNewtonEnergyAndGradient(vector<double> &gradient)
   {
     gradient.assign(_ncoords, 0.0);
+    double energy = 0.0;
+
+    if (HasAnalyticalGradients()) {
+      // Ensure analytical gradients in _gradientPtr are fresh for current coordinates.
+      energy = Energy(true) + _constraints.GetConstraintEnergy();
+
+      FOR_ATOMS_OF_MOL (a, _mol) {
+        const unsigned int idx = a->GetIdx();
+        const unsigned int coordIdx = (idx - 1) * 3;
+
+        if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx))
+          continue;
+
+        const vector3 constraintForce = _constraints.GetGradient(a->GetIdx());
+        if (!_constraints.IsXFixed(idx))
+          gradient[coordIdx] = -(_gradientPtr[coordIdx] + constraintForce.x());
+        if (!_constraints.IsYFixed(idx))
+          gradient[coordIdx+1] = -(_gradientPtr[coordIdx+1] + constraintForce.y());
+        if (!_constraints.IsZFixed(idx))
+          gradient[coordIdx+2] = -(_gradientPtr[coordIdx+2] + constraintForce.z());
+      }
+      return energy;
+    }
+
+    energy = Energy(false) + _constraints.GetConstraintEnergy();
 
     FOR_ATOMS_OF_MOL (a, _mol) {
       const unsigned int idx = a->GetIdx();
@@ -3167,6 +3185,8 @@ namespace OpenBabel
       if (!_constraints.IsZFixed(idx))
         gradient[coordIdx+2] = -force.z();
     }
+
+    return energy;
   }
 
   void OBForceField::ApplyQuasiNewtonConstraints(vector<double> &direction)
@@ -3269,9 +3289,10 @@ namespace OpenBabel
     for (int i = 1; i <= n; ++i) {
       _cstep++;
       vector<double> grad;
-      BuildQuasiNewtonGradient(grad);
+      const double e_n1_current = EvaluateQuasiNewtonEnergyAndGradient(grad);
       if (!IsFiniteVector(grad))
         return false;
+      _e_n1 = e_n1_current;
 
       if (_bfgsHInv.size() != _ncoords * _ncoords) {
         _bfgsHInv.assign(_ncoords * _ncoords, 0.0);
@@ -3311,7 +3332,7 @@ namespace OpenBabel
       }
 
       vector<double> g_new;
-      BuildQuasiNewtonGradient(g_new);
+      const double e_n2 = EvaluateQuasiNewtonEnergyAndGradient(g_new);
       if (!IsFiniteVector(g_new))
         return false;
 
@@ -3348,8 +3369,6 @@ namespace OpenBabel
       } else {
         _bfgsHInv.clear();
       }
-
-      const double e_n2 = Energy() + _constraints.GetConstraintEnergy();
 
       if ((_cstep % _pairfreq == 0) && _cutoff)
         UpdatePairsSimple();
@@ -3399,8 +3418,6 @@ namespace OpenBabel
     _gconv = 1.0e-2; // gradient convergence (0.1) squared
     _ncoords = _mol.NumAtoms() * 3;
     _lbfgsHistory = std::max(1, history);
-    _lbfgsPrevCoords.assign(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
-    _lbfgsPrevGrad.assign(_ncoords, 0.0);
     _lbfgsSHistory.clear();
     _lbfgsYHistory.clear();
     _lbfgsRhoHistory.clear();
@@ -3409,8 +3426,8 @@ namespace OpenBabel
     if (_cutoff)
       UpdatePairsSimple(); // Update the non-bonded pairs (Cut-off)
 
-    _e_n1 = Energy() + _constraints.GetConstraintEnergy();
-    BuildQuasiNewtonGradient(_lbfgsPrevGrad);
+    vector<double> gradient;
+    _e_n1 = EvaluateQuasiNewtonEnergyAndGradient(gradient);
 
     IF_OBFF_LOGLVL_LOW {
       OBFFLog("\nL - B F G S   M I N I M I Z A T I O N\n\n");
@@ -3436,9 +3453,10 @@ namespace OpenBabel
     for (int i = 1; i <= n; ++i) {
       _cstep++;
       vector<double> grad;
-      BuildQuasiNewtonGradient(grad);
+      const double e_n1_current = EvaluateQuasiNewtonEnergyAndGradient(grad);
       if (!IsFiniteVector(grad))
         return false;
+      _e_n1 = e_n1_current;
 
       vector<double> direction(_ncoords, 0.0);
       const size_t m = _lbfgsRhoHistory.size();
@@ -3497,7 +3515,7 @@ namespace OpenBabel
       }
 
       vector<double> g_new;
-      BuildQuasiNewtonGradient(g_new);
+      const double e_n2 = EvaluateQuasiNewtonEnergyAndGradient(g_new);
       if (!IsFiniteVector(g_new))
         return false;
 
@@ -3524,11 +3542,6 @@ namespace OpenBabel
         _lbfgsYHistory.clear();
         _lbfgsRhoHistory.clear();
       }
-
-      _lbfgsPrevCoords = x_new;
-      _lbfgsPrevGrad = g_new;
-
-      const double e_n2 = Energy() + _constraints.GetConstraintEnergy();
 
       if ((_cstep % _pairfreq == 0) && _cutoff)
         UpdatePairsSimple();

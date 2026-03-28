@@ -955,12 +955,21 @@ void test_LBFGS_Minimizer_Basic()
 
   OB_REQUIRE(pFF->Setup(mol));
   const double e0 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+  OBMol molSD = mol;
+  OBForceField *pFFSD = OBForceField::FindType("mmff94");
+  OB_REQUIRE(pFFSD != nullptr);
+  pFFSD->SetLogLevel(OBFF_LOGLVL_NONE);
+  OB_REQUIRE(pFFSD->Setup(molSD));
+  pFFSD->SteepestDescentInitialize(1, 1.0e-8, OBFF_ANALYTICAL_GRADIENT);
+  pFFSD->SteepestDescentTakeNSteps(1);
+  const double e_sd1 = pFFSD->Energy() + pFFSD->GetConstraints().GetConstraintEnergy();
 
   pFF->LBFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT, 5);
   pFF->LBFGSTakeNSteps(10);
   const double e1 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
   OB_ASSERT(isfinite(e1));
-  OB_ASSERT(e1 <= e0);
+  OB_ASSERT(e1 <= e0 + 1.0e-8);
+  OB_ASSERT(e1 <= e_sd1 + 1.0e-8);
   OB_ASSERT(!pFF->DetectExplosion());
 
   OBFFConstraints constraints;

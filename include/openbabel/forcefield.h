@@ -522,8 +522,8 @@ const double GAS_CONSTANT = 8.31446261815324e-3 / KCAL_TO_KJ;  //!< kcal mol^-1 
      *  \return true if atom a and b are in the same ring
      */
     bool IsInSameRing(OBAtom* a, OBAtom* b);
-    //! Build true gradient (dE/dx) for quasi-Newton minimizers.
-    void BuildQuasiNewtonGradient(std::vector<double> &gradient);
+    //! Evaluate energy and true gradient (dE/dx) for quasi-Newton minimizers.
+    double EvaluateQuasiNewtonEnergyAndGradient(std::vector<double> &gradient);
     //! Zero constrained direction components for quasi-Newton minimizers.
     void ApplyQuasiNewtonConstraints(std::vector<double> &direction);
     //! Build steepest-descent fallback direction from a true gradient.
@@ -555,8 +555,6 @@ const double GAS_CONSTANT = 8.31446261815324e-3 / KCAL_TO_KJ;  //!< kcal mol^-1 
     unsigned int _ncoords; //!< Number of coordinates for conjugate gradients
     int         _linesearch; //!< LineSearch type
     int         _lbfgsHistory; //!< Number of history pairs to store for L-BFGS
-    std::vector<double> _lbfgsPrevCoords; //!< Previous coordinates for L-BFGS state
-    std::vector<double> _lbfgsPrevGrad; //!< Previous true gradient (dE/dx) for L-BFGS state
     std::vector<std::vector<double> > _lbfgsSHistory; //!< L-BFGS coordinate differences
     std::vector<std::vector<double> > _lbfgsYHistory; //!< L-BFGS gradient differences
     std::vector<double> _lbfgsRhoHistory; //!< 1.0 / dot(y_i, s_i) for L-BFGS
