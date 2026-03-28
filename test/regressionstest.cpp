@@ -936,17 +936,22 @@ void test_MDLV3000CommentContainsV3000()
 
 void test_LBFGS_Minimizer_Basic()
 {
-  OBConversion conv;
   OBMol mol;
-  OB_REQUIRE(conv.SetInFormat("smi"));
-  OB_REQUIRE(conv.ReadString(&mol, "CCO"));
+  OBAtom *c1 = mol.NewAtom();
+  OBAtom *c2 = mol.NewAtom();
+  OBAtom *o1 = mol.NewAtom();
+  OB_REQUIRE(c1 != nullptr && c2 != nullptr && o1 != nullptr);
+  c1->SetAtomicNum(6);
+  c2->SetAtomicNum(6);
+  o1->SetAtomicNum(8);
+  OB_REQUIRE(mol.AddBond(c1->GetIdx(), c2->GetIdx(), 1));
+  OB_REQUIRE(mol.AddBond(c2->GetIdx(), o1->GetIdx(), 1));
 
   OBBuilder builder;
   OB_REQUIRE(builder.Build(mol, false));
   OB_REQUIRE(mol.AddHydrogens());
 
-  OBPlugin::LoadAllPlugins();
-  OBForceField *pFF = OBForceField::FindType("mmff94");
+  OBForceField *pFF = OBForceField::FindForceField("MMFF94");
   if (!pFF) {
     cerr << "WARNING: no forcefield plugin available, skipping L-BFGS regression test." << endl;
     return;
@@ -956,7 +961,7 @@ void test_LBFGS_Minimizer_Basic()
   OB_REQUIRE(pFF->Setup(mol));
   const double e0 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
   OBMol molSD = mol;
-  OBForceField *pFFSD = OBForceField::FindType("mmff94");
+  OBForceField *pFFSD = OBForceField::FindForceField("MMFF94");
   OB_REQUIRE(pFFSD != nullptr);
   pFFSD->SetLogLevel(OBFF_LOGLVL_NONE);
   OB_REQUIRE(pFFSD->Setup(molSD));
@@ -992,17 +997,22 @@ void test_LBFGS_Minimizer_Basic()
 
 void test_BFGS_Minimizer_Basic()
 {
-  OBConversion conv;
   OBMol mol;
-  OB_REQUIRE(conv.SetInFormat("smi"));
-  OB_REQUIRE(conv.ReadString(&mol, "CCO"));
+  OBAtom *c1 = mol.NewAtom();
+  OBAtom *c2 = mol.NewAtom();
+  OBAtom *o1 = mol.NewAtom();
+  OB_REQUIRE(c1 != nullptr && c2 != nullptr && o1 != nullptr);
+  c1->SetAtomicNum(6);
+  c2->SetAtomicNum(6);
+  o1->SetAtomicNum(8);
+  OB_REQUIRE(mol.AddBond(c1->GetIdx(), c2->GetIdx(), 1));
+  OB_REQUIRE(mol.AddBond(c2->GetIdx(), o1->GetIdx(), 1));
 
   OBBuilder builder;
   OB_REQUIRE(builder.Build(mol, false));
   OB_REQUIRE(mol.AddHydrogens());
 
-  OBPlugin::LoadAllPlugins();
-  OBForceField *pFF = OBForceField::FindType("mmff94");
+  OBForceField *pFF = OBForceField::FindForceField("MMFF94");
   if (!pFF) {
     cerr << "WARNING: no forcefield plugin available, skipping BFGS regression test." << endl;
     return;
@@ -1011,12 +1021,21 @@ void test_BFGS_Minimizer_Basic()
 
   OB_REQUIRE(pFF->Setup(mol));
   const double e0 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+  OBMol molSD = mol;
+  OBForceField *pFFSD = OBForceField::FindForceField("MMFF94");
+  OB_REQUIRE(pFFSD != nullptr);
+  pFFSD->SetLogLevel(OBFF_LOGLVL_NONE);
+  OB_REQUIRE(pFFSD->Setup(molSD));
+  pFFSD->SteepestDescentInitialize(1, 1.0e-8, OBFF_ANALYTICAL_GRADIENT);
+  pFFSD->SteepestDescentTakeNSteps(1);
+  const double e_sd1 = pFFSD->Energy() + pFFSD->GetConstraints().GetConstraintEnergy();
 
   pFF->BFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT);
   pFF->BFGSTakeNSteps(10);
   const double e1 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
   OB_ASSERT(isfinite(e1));
   OB_ASSERT(e1 <= e0 + 1.0e-8);
+  OB_ASSERT(e1 <= e_sd1 + 1.0e-8);
   OB_ASSERT(!pFF->DetectExplosion());
 
   OBFFConstraints constraints;

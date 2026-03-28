@@ -3171,12 +3171,7 @@ namespace OpenBabel
       if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx))
         continue;
 
-      vector3 force;
-      if (!HasAnalyticalGradients()) {
-        force = NumericalDerivative(&*a) + _constraints.GetGradient(a->GetIdx());
-      } else {
-        force = GetGradient(&*a) + _constraints.GetGradient(a->GetIdx());
-      }
+      const vector3 force = NumericalDerivative(&*a) + _constraints.GetGradient(a->GetIdx());
 
       if (!_constraints.IsXFixed(idx))
         gradient[coordIdx] = -force.x();
@@ -3263,7 +3258,8 @@ namespace OpenBabel
     if (_cutoff)
       UpdatePairsSimple(); // Update the non-bonded pairs (Cut-off)
 
-    _e_n1 = Energy() + _constraints.GetConstraintEnergy();
+    vector<double> gradient;
+    _e_n1 = EvaluateQuasiNewtonEnergyAndGradient(gradient);
 
     IF_OBFF_LOGLVL_LOW {
       OBFFLog("\nB F G S   M I N I M I Z A T I O N\n\n");

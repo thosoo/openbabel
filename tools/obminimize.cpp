@@ -41,6 +41,7 @@ int main(int argc,char **argv)
   int c;
   int steps = 2500;
   int lbfgsHistory = 7;
+  bool lbfgsHistorySpecified = false;
   double crit = 1e-6;
   enum MinimizerType {
     MinimizerCG,
@@ -75,7 +76,7 @@ int main(int argc,char **argv)
     cout << endl;
     cout << "  -bfgs       use full-memory BFGS algorithm" << endl;
     cout << endl;
-    cout << "  -m hist     specify L-BFGS history size (default=7)" << endl;
+    cout << "  -m hist     specify L-BFGS history size (default=7, requires -lbfgs)" << endl;
     cout << endl;
     cout << "  -newton     use Newton2Num linesearch (default=Simple)" << endl;
     cout << endl;
@@ -137,8 +138,18 @@ int main(int argc,char **argv)
         minimizer = MinimizerBFGS;
         ifile++;
       }
-      if ((option == "-m") && (argc > (i+1))) {
+      if (option == "-m") {
+        if (argc <= (i+1)) {
+          cerr << program_name << ": missing value for -m (L-BFGS history size)." << endl;
+          return -1;
+        }
         lbfgsHistory = atoi(argv[i+1]);
+        if (lbfgsHistory <= 0) {
+          cerr << program_name << ": invalid -m value (" << lbfgsHistory
+               << "). L-BFGS history size must be > 0." << endl;
+          return -1;
+        }
+        lbfgsHistorySpecified = true;
         ifile += 2;
       }
       // enable cut-off
@@ -190,6 +201,11 @@ int main(int argc,char **argv)
     if (extPos!= string::npos) {
       basename = filename.substr(0, extPos);
     }
+  }
+
+  if (lbfgsHistorySpecified && minimizer != MinimizerLBFGS) {
+    cerr << program_name << ": -m is only valid with -lbfgs." << endl;
+    return -1;
   }
 
   // Find Input filetype
