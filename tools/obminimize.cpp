@@ -40,8 +40,14 @@ int main(int argc,char **argv)
   char *program_name= argv[0];
   int c;
   int steps = 2500;
+  int lbfgsHistory = 7;
   double crit = 1e-6;
-  bool sd = false;
+  enum MinimizerType {
+    MinimizerCG,
+    MinimizerSD,
+    MinimizerLBFGS
+  };
+  MinimizerType minimizer = MinimizerCG;
   bool cut = false;
   bool newton = false;
   bool hydrogens = false;
@@ -63,6 +69,10 @@ int main(int argc,char **argv)
     cout << "  -cg         use conjugate gradients algorithm (default)" << endl;
     cout << endl;
     cout << "  -sd         use steepest descent algorithm" << endl;
+    cout << endl;
+    cout << "  -lbfgs      use limited-memory BFGS algorithm" << endl;
+    cout << endl;
+    cout << "  -m hist     specify L-BFGS history size (default=7)" << endl;
     cout << endl;
     cout << "  -newton     use Newton2Num linesearch (default=Simple)" << endl;
     cout << endl;
@@ -113,8 +123,16 @@ int main(int argc,char **argv)
       }
       // steepest descent
       if (option == "-sd") {
-        sd = true;
+        minimizer = MinimizerSD;
         ifile++;
+      }
+      if (option == "-lbfgs") {
+        minimizer = MinimizerLBFGS;
+        ifile++;
+      }
+      if ((option == "-m") && (argc > (i+1))) {
+        lbfgsHistory = atoi(argv[i+1]);
+        ifile += 2;
       }
       // enable cut-off
       if (option == "-cut") {
@@ -144,7 +162,7 @@ int main(int argc,char **argv)
       }
 
       if (option == "-cg") {
-        sd = false;
+        minimizer = MinimizerCG;
         ifile++;
       }
 
@@ -221,16 +239,20 @@ int main(int argc,char **argv)
     bool done = true;
     OBStopwatch timer;
     timer.Start();
-    if (sd) {
+    if (minimizer == MinimizerSD) {
       pFF->SteepestDescentInitialize(steps, crit);
+    } else if (minimizer == MinimizerLBFGS) {
+      pFF->LBFGSInitialize(steps, crit, OBFF_ANALYTICAL_GRADIENT, lbfgsHistory);
     } else {
       pFF->ConjugateGradientsInitialize(steps, crit);
     }
 
     unsigned int totalSteps = 1;
     while (done) {
-      if (sd)
+      if (minimizer == MinimizerSD)
         done = pFF->SteepestDescentTakeNSteps(1);
+      else if (minimizer == MinimizerLBFGS)
+        done = pFF->LBFGSTakeNSteps(1);
       else
         done = pFF->ConjugateGradientsTakeNSteps(1);
       totalSteps++;

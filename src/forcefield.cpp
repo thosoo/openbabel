@@ -19,6 +19,9 @@ GNU General Public License for more details.
 ***********************************************************************/
 #include <openbabel/babelconfig.h>
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <set>
 
 #include <openbabel/forcefield.h>
@@ -817,6 +820,12 @@ namespace OpenBabel
       _velocityPtr = nullptr;
       _gradientPtr = nullptr;
       _grad1 = nullptr;
+      _lbfgsHistory = 7;
+      _lbfgsPrevCoords.clear();
+      _lbfgsPrevGrad.clear();
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
     }
 
     if (IsSetupNeeded(mol)) {
@@ -828,6 +837,11 @@ namespace OpenBabel
 
       delete [] _gradientPtr;
       _gradientPtr = new double[_ncoords];
+      _lbfgsPrevCoords.clear();
+      _lbfgsPrevGrad.clear();
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
 
       if (_mol.NumAtoms() && _constraints.Size())
         _constraints.Setup(_mol);
@@ -871,6 +885,13 @@ namespace OpenBabel
       _init = true;
       _velocityPtr = nullptr;
       _gradientPtr = nullptr;
+      _grad1 = nullptr;
+      _lbfgsHistory = 7;
+      _lbfgsPrevCoords.clear();
+      _lbfgsPrevGrad.clear();
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
     }
 
     if (IsSetupNeeded(mol)) {
@@ -882,6 +903,11 @@ namespace OpenBabel
 
       delete [] _gradientPtr;
       _gradientPtr = new double[_ncoords];
+      _lbfgsPrevCoords.clear();
+      _lbfgsPrevGrad.clear();
+      _lbfgsSHistory.clear();
+      _lbfgsYHistory.clear();
+      _lbfgsRhoHistory.clear();
 
       _constraints = constraints;
       if (_mol.NumAtoms() && _constraints.Size())
@@ -3067,6 +3093,316 @@ namespace OpenBabel
     ConjugateGradientsInitialize(steps, econv, method);
     if (steps > 1) // ConjugateGradientsInitialize takes the first step
       ConjugateGradientsTakeNSteps(steps);
+  }
+
+  namespace
+  {
+    inline bool IsFiniteVector(const vector<double> &v)
+    {
+      for (size_t i = 0; i < v.size(); ++i) {
+        if (!isfinite(v[i]))
+          return false;
+      }
+      return true;
+    }
+
+    inline double DotProduct(const vector<double> &a, const vector<double> &b)
+    {
+      double sum = 0.0;
+      for (size_t i = 0; i < a.size(); ++i)
+        sum += a[i] * b[i];
+      return sum;
+    }
+
+    inline double InfinityNorm(const vector<double> &v)
+    {
+      double maxval = 0.0;
+      for (size_t i = 0; i < v.size(); ++i) {
+        const double value = fabs(v[i]);
+        if (value > maxval)
+          maxval = value;
+      }
+      return maxval;
+    }
+  }
+
+  void OBForceField::LBFGSInitialize(int steps, double econv, int method, int history)
+  {
+    if (!_validSetup || steps == 0)
+      return;
+
+    _cstep = 0;
+    _nsteps = steps;
+    _econv = econv;
+    _gconv = 1.0e-2; // gradient convergence (0.1) squared
+    _ncoords = _mol.NumAtoms() * 3;
+    _lbfgsHistory = std::max(1, history);
+
+    _lbfgsPrevCoords.assign(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
+    _lbfgsPrevGrad.assign(_ncoords, 0.0);
+    _lbfgsSHistory.clear();
+    _lbfgsYHistory.clear();
+    _lbfgsRhoHistory.clear();
+
+    if (_cutoff)
+      UpdatePairsSimple(); // Update the non-bonded pairs (Cut-off)
+
+    _e_n1 = Energy() + _constraints.GetConstraintEnergy();
+
+    vector3 force;
+    FOR_ATOMS_OF_MOL (a, _mol) {
+      const unsigned int idx = a->GetIdx();
+      const unsigned int coordIdx = (idx - 1) * 3;
+
+      if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx)) {
+        continue;
+      }
+
+      if (!HasAnalyticalGradients()) {
+        force = NumericalDerivative(&*a) + _constraints.GetGradient(a->GetIdx());
+      } else {
+        force = GetGradient(&*a) + _constraints.GetGradient(a->GetIdx());
+      }
+
+      if (!_constraints.IsXFixed(idx))
+        _lbfgsPrevGrad[coordIdx] = -force.x();
+      if (!_constraints.IsYFixed(idx))
+        _lbfgsPrevGrad[coordIdx+1] = -force.y();
+      if (!_constraints.IsZFixed(idx))
+        _lbfgsPrevGrad[coordIdx+2] = -force.z();
+    }
+
+    IF_OBFF_LOGLVL_LOW {
+      OBFFLog("\nL - B F G S   M I N I M I Z A T I O N\n\n");
+      snprintf(_logbuf, BUFF_SIZE, "STEPS = %d  HISTORY = %d\n\n",  steps, _lbfgsHistory);
+      OBFFLog(_logbuf);
+      OBFFLog("STEP n     E(n)       E(n-1)    \n");
+      OBFFLog("--------------------------------\n");
+      snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f      ----\n", _cstep, _e_n1);
+      OBFFLog(_logbuf);
+    }
+  }
+
+  bool OBForceField::LBFGSTakeNSteps(int n)
+  {
+    if (!_validSetup)
+      return false;
+
+    if (_ncoords != _mol.NumAtoms() * 3)
+      return false;
+
+    const double curvatureEps = 1.0e-12;
+
+    for (int i = 1; i <= n; ++i) {
+      _cstep++;
+
+      vector<double> grad(_ncoords, 0.0); // true mathematical gradient (dE/dx)
+      vector<double> direction(_ncoords, 0.0); // descent direction in force convention
+
+      vector3 force;
+      FOR_ATOMS_OF_MOL (a, _mol) {
+        const unsigned int idx = a->GetIdx();
+        const unsigned int coordIdx = (idx - 1) * 3;
+
+        if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx))
+          continue;
+
+        if (!HasAnalyticalGradients()) {
+          force = NumericalDerivative(&*a) + _constraints.GetGradient(a->GetIdx());
+        } else {
+          force = GetGradient(&*a) + _constraints.GetGradient(a->GetIdx());
+        }
+
+        if (!_constraints.IsXFixed(idx))
+          grad[coordIdx] = -force.x();
+        if (!_constraints.IsYFixed(idx))
+          grad[coordIdx+1] = -force.y();
+        if (!_constraints.IsZFixed(idx))
+          grad[coordIdx+2] = -force.z();
+      }
+
+      if (!IsFiniteVector(grad)) {
+        return false;
+      }
+
+      const double gradInfNorm = InfinityNorm(grad);
+
+      const size_t m = _lbfgsRhoHistory.size();
+      if (m == 0) {
+        for (unsigned int c = 0; c < _ncoords; ++c)
+          direction[c] = -grad[c];
+      } else {
+        vector<double> q = grad;
+        vector<double> alpha(m, 0.0);
+
+        for (size_t rev = 0; rev < m; ++rev) {
+          const size_t j = m - 1 - rev;
+          alpha[j] = _lbfgsRhoHistory[j] * DotProduct(_lbfgsSHistory[j], q);
+          for (unsigned int c = 0; c < _ncoords; ++c)
+            q[c] -= alpha[j] * _lbfgsYHistory[j][c];
+        }
+
+        double gamma = 1.0;
+        const double ys = DotProduct(_lbfgsYHistory[m-1], _lbfgsSHistory[m-1]);
+        const double yy = DotProduct(_lbfgsYHistory[m-1], _lbfgsYHistory[m-1]);
+        if (fabs(yy) > curvatureEps && isfinite(ys / yy))
+          gamma = ys / yy;
+
+        vector<double> r(_ncoords, 0.0);
+        for (unsigned int c = 0; c < _ncoords; ++c)
+          r[c] = gamma * q[c];
+
+        for (size_t j = 0; j < m; ++j) {
+          const double beta = _lbfgsRhoHistory[j] * DotProduct(_lbfgsYHistory[j], r);
+          for (unsigned int c = 0; c < _ncoords; ++c)
+            r[c] += _lbfgsSHistory[j][c] * (alpha[j] - beta);
+        }
+
+        for (unsigned int c = 0; c < _ncoords; ++c)
+          direction[c] = -r[c];
+      }
+
+      // Direction is in the force convention used by LineSearch and Newton2NumLineSearch.
+      // Fallback to steepest descent if direction is invalid or non-descent.
+      bool useSteepestDescent = !IsFiniteVector(direction);
+      double directionalDerivative = 0.0;
+      if (!useSteepestDescent)
+        directionalDerivative = DotProduct(grad, direction);
+      if (useSteepestDescent || !(directionalDerivative < 0.0)) {
+        for (unsigned int c = 0; c < _ncoords; ++c)
+          direction[c] = -grad[c];
+        _lbfgsSHistory.clear();
+        _lbfgsYHistory.clear();
+        _lbfgsRhoHistory.clear();
+      }
+
+      // Enforce per-axis constraints and fixed atoms.
+      FOR_ATOMS_OF_MOL (a, _mol) {
+        const unsigned int idx = a->GetIdx();
+        const unsigned int coordIdx = (idx - 1) * 3;
+
+        if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx)) {
+          direction[coordIdx] = 0.0;
+          direction[coordIdx+1] = 0.0;
+          direction[coordIdx+2] = 0.0;
+          continue;
+        }
+
+        if (_constraints.IsXFixed(idx))
+          direction[coordIdx] = 0.0;
+        if (_constraints.IsYFixed(idx))
+          direction[coordIdx+1] = 0.0;
+        if (_constraints.IsZFixed(idx))
+          direction[coordIdx+2] = 0.0;
+      }
+
+      if (!IsFiniteVector(direction))
+        return false;
+
+      for (unsigned int c = 0; c < _ncoords; ++c)
+        _gradientPtr[c] = direction[c];
+
+      const vector<double> x_old(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
+      const vector<double> g_old = grad;
+
+      switch (_linesearch) {
+      case LineSearchType::Newton2Num:
+        Newton2NumLineSearch(&direction[0]);
+        break;
+      default:
+      case LineSearchType::Simple:
+        LineSearch(_mol.GetCoordinates(), &direction[0]);
+        break;
+      }
+
+      vector<double> g_new(_ncoords, 0.0);
+      FOR_ATOMS_OF_MOL (a, _mol) {
+        const unsigned int idx = a->GetIdx();
+        const unsigned int coordIdx = (idx - 1) * 3;
+        if (_constraints.IsFixed(idx) || (_fixAtom == idx) || (_ignoreAtom == idx))
+          continue;
+
+        if (!HasAnalyticalGradients()) {
+          force = NumericalDerivative(&*a) + _constraints.GetGradient(a->GetIdx());
+        } else {
+          force = GetGradient(&*a) + _constraints.GetGradient(a->GetIdx());
+        }
+
+        if (!_constraints.IsXFixed(idx))
+          g_new[coordIdx] = -force.x();
+        if (!_constraints.IsYFixed(idx))
+          g_new[coordIdx+1] = -force.y();
+        if (!_constraints.IsZFixed(idx))
+          g_new[coordIdx+2] = -force.z();
+      }
+
+      if (!IsFiniteVector(g_new))
+        return false;
+
+      const vector<double> x_new(_mol.GetCoordinates(), _mol.GetCoordinates() + _ncoords);
+      vector<double> s(_ncoords, 0.0);
+      vector<double> y(_ncoords, 0.0);
+      for (unsigned int c = 0; c < _ncoords; ++c) {
+        s[c] = x_new[c] - x_old[c];
+        y[c] = g_new[c] - g_old[c];
+      }
+
+      const double ys = DotProduct(y, s);
+      if (isfinite(ys) && (ys > curvatureEps)) {
+        if (static_cast<int>(_lbfgsSHistory.size()) == _lbfgsHistory) {
+          _lbfgsSHistory.erase(_lbfgsSHistory.begin());
+          _lbfgsYHistory.erase(_lbfgsYHistory.begin());
+          _lbfgsRhoHistory.erase(_lbfgsRhoHistory.begin());
+        }
+        _lbfgsSHistory.push_back(s);
+        _lbfgsYHistory.push_back(y);
+        _lbfgsRhoHistory.push_back(1.0 / ys);
+      } else {
+        _lbfgsSHistory.clear();
+        _lbfgsYHistory.clear();
+        _lbfgsRhoHistory.clear();
+      }
+
+      _lbfgsPrevCoords = x_new;
+      _lbfgsPrevGrad = g_new;
+
+      const double e_n2 = Energy() + _constraints.GetConstraintEnergy();
+
+      if ((_cstep % _pairfreq == 0) && _cutoff)
+        UpdatePairsSimple();
+
+      IF_OBFF_LOGLVL_LOW {
+        if (_cstep % 10 == 0) {
+          snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f    %8.3f\n", _cstep, e_n2, _e_n1);
+          OBFFLog(_logbuf);
+        }
+      }
+
+      if (IsNear(e_n2, _e_n1, _econv) && (gradInfNorm * gradInfNorm < _gconv)) {
+        IF_OBFF_LOGLVL_LOW {
+          snprintf(_logbuf, BUFF_SIZE, " %4d    %8.3f    %8.3f\n", _cstep, e_n2, _e_n1);
+          OBFFLog(_logbuf);
+          OBFFLog("    L-BFGS HAS CONVERGED\n");
+        }
+        _e_n1 = e_n2;
+        return false;
+      }
+
+      _e_n1 = e_n2;
+      if (_nsteps == _cstep)
+        return false;
+    }
+
+    return true;
+  }
+
+  void OBForceField::LBFGS(int steps, double econv, int method)
+  {
+    if (steps <= 0)
+      return;
+
+    LBFGSInitialize(steps, econv, method);
+    LBFGSTakeNSteps(steps);
   }
 
   //

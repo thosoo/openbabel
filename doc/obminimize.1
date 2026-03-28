@@ -24,6 +24,10 @@ Set convergence criteria (default=1e-6)
 Use conjugate gradients algorithm (default)
 .It Fl sd
 Use steepest descent algorithm
+.It Fl lbfgs
+Use a limited-memory BFGS quasi-Newton algorithm
+.It Fl m Ar history
+Specify the L-BFGS history size (default=7)
 .It Fl newton
 Use Newton2Num linesearch (default=Simple)
 .It Fl ff Ar forcefield

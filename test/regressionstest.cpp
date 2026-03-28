@@ -9,6 +9,7 @@
 #include <openbabel/generic.h>
 #include <openbabel/forcefield.h>
 #include <openbabel/plugin.h>
+#include <openbabel/builder.h>
 
 #include <cmath>
 #include <cstdio>
@@ -510,7 +511,7 @@ void test_github_issue_1794()
   conv.SetInFormat("smi");
   conv.ReadString(&mol, "CC[2H]");
 
-  OBForceField *pFF = OBForceField::FindForceField("UFF");
+  OBForceField *pFF = OBForceField::FindType("mmff94");
   OB_REQUIRE(pFF);
 
   OB_ASSERT(pFF->Setup(mol));
@@ -933,6 +934,53 @@ void test_MDLV3000CommentContainsV3000()
   OB_COMPARE(mol.NumBonds(), 1);
 }
 
+void test_LBFGS_Minimizer_Basic()
+{
+  OBConversion conv;
+  OBMol mol;
+  OB_REQUIRE(conv.SetInFormat("smi"));
+  OB_REQUIRE(conv.ReadString(&mol, "CCO"));
+
+  OBBuilder builder;
+  OB_REQUIRE(builder.Build(mol, false));
+  OB_REQUIRE(mol.AddHydrogens());
+
+  OBPlugin::LoadAllPlugins();
+  OBForceField *pFF = OBForceField::FindType("mmff94");
+  if (!pFF) {
+    cerr << "WARNING: no forcefield plugin available, skipping L-BFGS regression test." << endl;
+    return;
+  }
+  pFF->SetLogLevel(OBFF_LOGLVL_NONE);
+
+  OB_REQUIRE(pFF->Setup(mol));
+  const double e0 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+
+  pFF->LBFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT, 5);
+  pFF->LBFGSTakeNSteps(10);
+  const double e1 = pFF->Energy() + pFF->GetConstraints().GetConstraintEnergy();
+  OB_ASSERT(isfinite(e1));
+  OB_ASSERT(e1 <= e0);
+  OB_ASSERT(!pFF->DetectExplosion());
+
+  OBFFConstraints constraints;
+  constraints.AddAtomConstraint(1);
+  OB_REQUIRE(pFF->Setup(mol, constraints));
+
+  OBAtom *fixed = mol.GetAtom(1);
+  OB_REQUIRE(fixed != nullptr);
+  const vector3 before = fixed->GetVector();
+
+  pFF->LBFGSInitialize(10, 1.0e-8, OBFF_ANALYTICAL_GRADIENT, 5);
+  pFF->LBFGSTakeNSteps(10);
+  OB_REQUIRE(pFF->GetCoordinates(mol));
+
+  fixed = mol.GetAtom(1);
+  OB_REQUIRE(fixed != nullptr);
+  const vector3 after = fixed->GetVector();
+  OB_ASSERT((after - before).length_2() < 1.0e-12);
+}
+
 int regressionstest(int argc, char *argv[])
 {
   int defaultchoice = 1;
@@ -1033,6 +1081,9 @@ int regressionstest(int argc, char *argv[])
     break;
   case 3410:
     test_MDLV3000CommentContainsV3000();
+    break;
+  case 3420:
+    test_LBFGS_Minimizer_Basic();
     break;
   // case N:
   //   YOUR_TEST_HERE();
