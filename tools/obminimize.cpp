@@ -45,6 +45,7 @@ int main(int argc,char **argv)
   enum MinimizerType {
     MinimizerCG,
     MinimizerSD,
+    MinimizerBFGS,
     MinimizerLBFGS
   };
   MinimizerType minimizer = MinimizerCG;
@@ -71,6 +72,8 @@ int main(int argc,char **argv)
     cout << "  -sd         use steepest descent algorithm" << endl;
     cout << endl;
     cout << "  -lbfgs      use limited-memory BFGS algorithm" << endl;
+    cout << endl;
+    cout << "  -bfgs       use full-memory BFGS algorithm" << endl;
     cout << endl;
     cout << "  -m hist     specify L-BFGS history size (default=7)" << endl;
     cout << endl;
@@ -128,6 +131,10 @@ int main(int argc,char **argv)
       }
       if (option == "-lbfgs") {
         minimizer = MinimizerLBFGS;
+        ifile++;
+      }
+      if (option == "-bfgs") {
+        minimizer = MinimizerBFGS;
         ifile++;
       }
       if ((option == "-m") && (argc > (i+1))) {
@@ -241,6 +248,8 @@ int main(int argc,char **argv)
     timer.Start();
     if (minimizer == MinimizerSD) {
       pFF->SteepestDescentInitialize(steps, crit);
+    } else if (minimizer == MinimizerBFGS) {
+      pFF->BFGSInitialize(steps, crit);
     } else if (minimizer == MinimizerLBFGS) {
       pFF->LBFGSInitialize(steps, crit, OBFF_ANALYTICAL_GRADIENT, lbfgsHistory);
     } else {
@@ -251,6 +260,8 @@ int main(int argc,char **argv)
     while (done) {
       if (minimizer == MinimizerSD)
         done = pFF->SteepestDescentTakeNSteps(1);
+      else if (minimizer == MinimizerBFGS)
+        done = pFF->BFGSTakeNSteps(1);
       else if (minimizer == MinimizerLBFGS)
         done = pFF->LBFGSTakeNSteps(1);
       else

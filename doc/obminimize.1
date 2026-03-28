@@ -26,6 +26,8 @@ Use conjugate gradients algorithm (default)
 Use steepest descent algorithm
 .It Fl lbfgs
 Use a limited-memory BFGS quasi-Newton algorithm
+.It Fl bfgs
+Use a full-memory BFGS quasi-Newton algorithm
 .It Fl m Ar history
 Specify the L-BFGS history size (default=7)
 .It Fl newton
@@ -66,6 +68,10 @@ at most 300 geometry optimization steps
 Minimize the energy for the molecule(s) in file test.mol2 using the
 steepest descent algorithm and convergence criteria 1e-5:
 .Dl "obminimize -sd -c 1e-5 test.mol2"
+.Pp
+Minimize the energy for the molecule(s) in file test.mol2 using
+full-memory BFGS:
+.Dl "obminimize -bfgs test.mol2"
 .Sh SEE ALSO
 .Xr obabel 1 ,
 .Xr obenergy 1 ,
