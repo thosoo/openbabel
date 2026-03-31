@@ -19,6 +19,12 @@
 #include <algorithm>
 #include <iterator>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 using namespace std;
 using namespace OpenBabel;
 
@@ -138,6 +144,29 @@ static std::string load_clipboard_style_cdx_bytes()
                      std::istreambuf_iterator<char>());
 }
 
+static std::string make_temp_cdx_path()
+{
+#ifdef _WIN32
+  char tempDir[MAX_PATH];
+  char tempFile[MAX_PATH];
+  DWORD pathLen = GetTempPathA(MAX_PATH, tempDir);
+  if (pathLen == 0 || pathLen > MAX_PATH)
+    return "";
+  if (GetTempFileNameA(tempDir, "obc", 0, tempFile) == 0)
+    return "";
+  return std::string(tempFile);
+#else
+  std::string pattern("/tmp/openbabel_cdx_XXXXXX");
+  std::vector<char> writable(pattern.begin(), pattern.end());
+  writable.push_back('\0');
+  int fd = mkstemp(writable.data());
+  if (fd == -1)
+    return "";
+  close(fd);
+  return std::string(writable.data());
+#endif
+}
+
 void test_ChemDraw_ReadString_ClipboardStyle()
 {
   const std::string cdxPayload = load_clipboard_style_cdx_bytes();
@@ -155,7 +184,8 @@ void test_ChemDraw_ReadFile_ClipboardStyle()
   const std::string cdxPayload = load_clipboard_style_cdx_bytes();
   OB_REQUIRE(!cdxPayload.empty());
 
-  const std::string tempPath = OBTestUtil::GetFilename("chemdraw_clipboard_temp_readfile.cdx");
+  const std::string tempPath = make_temp_cdx_path();
+  OB_REQUIRE(!tempPath.empty());
   std::ofstream ofs(tempPath.c_str(), ios_base::out | ios_base::binary | ios_base::trunc);
   OB_REQUIRE(ofs.good());
   ofs.write(cdxPayload.data(), static_cast<std::streamsize>(cdxPayload.size()));

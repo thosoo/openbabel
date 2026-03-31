@@ -215,6 +215,8 @@ bool ChemDrawBinaryXFormat::ReadMolecule(OBBase* pOb, OBConversion* pConv)
   _graphicmap.clear();
   _groupmap.clear();
   _firstMolTarget = nullptr;
+  // Direct ReadString/ReadFile callers expect pOb to be populated; when converting
+  // with an output format, keep the existing AddChemObject queue behavior.
   if(pConv->GetOutFormat() == nullptr)
     _firstMolTarget = dynamic_cast<OBMol*>(pOb);
   _firstMolTargetUsed = false;
