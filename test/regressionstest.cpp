@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <iterator>
 
 using namespace std;
 using namespace OpenBabel;
@@ -116,6 +117,57 @@ void test_ChemDraw_XML_Basic()
     std::string out = outs.str();
     OB_COMPARE(remove_slashr(out.c_str()), cdxmlData[i].smi);
   }
+}
+
+static std::string load_clipboard_style_cdx_bytes()
+{
+  const std::string fixturePath = OBTestUtil::GetFilename("chemdraw_clipboard_sample.cdx");
+  std::ifstream fixture(fixturePath.c_str(), ios_base::in | ios_base::binary);
+  if (fixture.good())
+  {
+    return std::string((std::istreambuf_iterator<char>(fixture)),
+                       std::istreambuf_iterator<char>());
+  }
+
+  // Fallback keeps this regression active in CI until a real clipboard
+  // payload is dropped in test/files/chemdraw_clipboard_sample.cdx.
+  const std::string fallbackPath = OBTestUtil::GetFilename("ethanol.cdx");
+  std::ifstream fallback(fallbackPath.c_str(), ios_base::in | ios_base::binary);
+  OB_REQUIRE(fallback.good());
+  return std::string((std::istreambuf_iterator<char>(fallback)),
+                     std::istreambuf_iterator<char>());
+}
+
+void test_ChemDraw_ReadString_ClipboardStyle()
+{
+  const std::string cdxPayload = load_clipboard_style_cdx_bytes();
+  OB_REQUIRE(!cdxPayload.empty());
+
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInFormat("cdx"));
+  OBMol mol;
+  OB_REQUIRE(conv.ReadString(&mol, cdxPayload));
+  OB_ASSERT(mol.NumAtoms() > 0);
+}
+
+void test_ChemDraw_ReadFile_ClipboardStyle()
+{
+  const std::string cdxPayload = load_clipboard_style_cdx_bytes();
+  OB_REQUIRE(!cdxPayload.empty());
+
+  const std::string tempPath = OBTestUtil::GetFilename("chemdraw_clipboard_temp_readfile.cdx");
+  std::ofstream ofs(tempPath.c_str(), ios_base::out | ios_base::binary | ios_base::trunc);
+  OB_REQUIRE(ofs.good());
+  ofs.write(cdxPayload.data(), static_cast<std::streamsize>(cdxPayload.size()));
+  ofs.close();
+
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInFormat("cdx"));
+  OBMol mol;
+  OB_REQUIRE(conv.ReadFile(&mol, tempPath));
+  OB_ASSERT(mol.NumAtoms() > 0);
+
+  std::remove(tempPath.c_str());
 }
 
 // A basic test of functionality
@@ -1162,6 +1214,12 @@ int regressionstest(int argc, char *argv[])
     break;
   case 3430:
     test_BFGS_Minimizer_Basic();
+    break;
+  case 3440:
+    test_ChemDraw_ReadString_ClipboardStyle();
+    break;
+  case 3450:
+    test_ChemDraw_ReadFile_ClipboardStyle();
     break;
   // case N:
   //   YOUR_TEST_HERE();

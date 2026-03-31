@@ -1,0 +1,11 @@
+Drop a raw ChemDraw clipboard CDX payload into this directory as:
+
+  test/files/chemdraw_clipboard_sample.cdx
+
+Expected payload characteristics from Avogadro clipboard capture:
+- MIME: application/x-qt-windows-mime;value="ChemDraw Interchange Format"
+- First 8 bytes: 56 6a 43 44 30 31 30 30 (ASCII "VjCD0100")
+- Embedded CDX offset: 0
+
+The Open Babel regression tests 3440 and 3450 will automatically pick this file up.
+If it is absent, tests fall back to ethanol.cdx to keep CI coverage active.

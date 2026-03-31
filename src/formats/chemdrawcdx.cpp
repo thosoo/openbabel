@@ -185,6 +185,8 @@ private:
   std::map<CDXObjectID, graphicType> _graphicmap;
   std::map<CDXObjectID, OBMol*> _molmap;
   std::map<CDXObjectID, std::vector<CDXObjectID> > _groupmap;
+  OBMol* _firstMolTarget;
+  bool _firstMolTargetUsed;
   // In case of chain A -> B -> C, B is both reactant and product
   CDXObjectID _lastProdId;
   typedef std::map<CDXObjectID, std::vector<CDXObjectID> >::iterator GroupMapIterator;
@@ -212,6 +214,10 @@ bool ChemDrawBinaryXFormat::ReadMolecule(OBBase* pOb, OBConversion* pConv)
   _molmap.clear();
   _graphicmap.clear();
   _groupmap.clear();
+  _firstMolTarget = nullptr;
+  if(pConv->GetOutFormat() == nullptr)
+    _firstMolTarget = dynamic_cast<OBMol*>(pOb);
+  _firstMolTargetUsed = false;
   OBMol* pmol=nullptr;
   bool ok = true;
 
@@ -246,6 +252,8 @@ bool ChemDrawBinaryXFormat::ReadMolecule(OBBase* pOb, OBConversion* pConv)
   for(; mapiter!=_molmap.end(); ++mapiter)
   {
     pmol = mapiter->second;
+    if(pmol == _firstMolTarget)
+      continue;
     if(!(pmol->GetFlags() & usedFlag) && strcmp(pmol->GetTitle(),"justplus"))
     {
       OBMol* ptmol = static_cast<OBMol*>(pmol->DoTransformations(
@@ -278,7 +286,17 @@ bool ChemDrawBinaryXFormat::TopLevelParse
 
     else if(tag==kCDXObj_Fragment)
     {
-      OBMol* pmol = new OBMol;
+      OBMol* pmol;
+      if(_firstMolTarget && !_firstMolTargetUsed)
+      {
+        pmol = _firstMolTarget;
+        pmol->Clear();
+        _firstMolTargetUsed = true;
+      }
+      else
+      {
+        pmol = new OBMol;
+      }
       //Save all molecules to the end
       _molmap[cdxr.CurrentID()] = pmol;
 
@@ -294,11 +312,21 @@ bool ChemDrawBinaryXFormat::TopLevelParse
 
     else if(tag == kCDXObj_ReactionStep && readReactions)
     {
-      OBMol* pReact = new OBMol;
+      OBMol* pReact;
+      if(_firstMolTarget && !_firstMolTargetUsed)
+      {
+        pReact = _firstMolTarget;
+        pReact->Clear();
+        _firstMolTargetUsed = true;
+      }
+      else
+      {
+        pReact = new OBMol;
+      }
       pReact->SetIsReaction();
       ok = DoReaction(cdxr, pReact);
       // Output OBReaction and continue 
-      if(pReact)
+      if(pReact && pReact != _firstMolTarget)
         if(!pConv->AddChemObject(pReact))
           return false; //error during writing
     }
