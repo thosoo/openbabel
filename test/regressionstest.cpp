@@ -18,6 +18,14 @@
 #include <vector>
 #include <algorithm>
 #include <iterator>
+#include <cstdlib>
+
+#if defined(__has_include)
+#  if __has_include(<filesystem>)
+#    include <filesystem>
+#    define OB_TEST_HAS_STD_FILESYSTEM 1
+#  endif
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -156,7 +164,17 @@ static std::string make_temp_cdx_path()
     return "";
   return std::string(tempFile);
 #else
-  std::string pattern("/tmp/openbabel_cdx_XXXXXX");
+  std::string tempDir;
+#if defined(OB_TEST_HAS_STD_FILESYSTEM) && (__cplusplus >= 201703L)
+  tempDir = std::filesystem::temp_directory_path().string();
+#else
+  const char* envTempDir = std::getenv("TMPDIR");
+  tempDir = envTempDir ? envTempDir : ".";
+#endif
+  if (!tempDir.empty() && tempDir[tempDir.size() - 1] != '/')
+    tempDir += "/";
+
+  std::string pattern = tempDir + "openbabel_cdx_XXXXXX";
   std::vector<char> writable(pattern.begin(), pattern.end());
   writable.push_back('\0');
   int fd = mkstemp(writable.data());
