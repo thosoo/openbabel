@@ -3,6 +3,7 @@
 #include <openbabel/obconversion.h>
 #include <openbabel/builder.h>
 #include <openbabel/forcefield.h>
+#include <openbabel/obiter.h>
 
 #include <iostream>
 #include <string>
@@ -94,15 +95,154 @@ bool doSMILESBuilderTest(string smiles)
 
   OBMol mol;
   OBConversion conv;
-  OBFormat *smilesFormat = conv.FindFormat("smi");
-  OB_REQUIRE(smilesFormat);
-  OB_REQUIRE(conv.SetInFormat(smilesFormat));
+  OB_REQUIRE(conv.SetInAndOutFormats("smi", "can"));
 
   OB_REQUIRE(conv.ReadString(&mol, smiles));
 
   OBBuilder builder;
   OB_REQUIRE(builder.Build(mol, false)); // some stereo errors are known
   return (mol.Has3D() && mol.HasNonZeroCoords());
+}
+
+bool doBuilderGeometrySanityTest(double minNonBondedDistanceCutoff)
+{
+  cout << " Geometry sanity for manually constructed bicyclic-like topology" << endl;
+
+  testCount++;
+
+  OBMol mol;
+  for (int i = 0; i < 6; ++i) {
+    OBAtom* a = mol.NewAtom();
+    OB_REQUIRE(a != nullptr);
+    a->SetAtomicNum(6);
+  }
+  // Ring: 1-2-3-4-5-6-1
+  OB_REQUIRE(mol.AddBond(1, 2, 1));
+  OB_REQUIRE(mol.AddBond(2, 3, 1));
+  OB_REQUIRE(mol.AddBond(3, 4, 1));
+  OB_REQUIRE(mol.AddBond(4, 5, 1));
+  OB_REQUIRE(mol.AddBond(5, 6, 1));
+  OB_REQUIRE(mol.AddBond(6, 1, 1));
+  mol.SetDimension(0);
+
+  const int inputDimension = mol.GetDimension();
+
+  OBBuilder builder;
+  OB_REQUIRE(builder.Build(mol, false));
+  OB_REQUIRE(mol.GetDimension() == 3);
+  OB_REQUIRE(inputDimension != 3);
+
+  const double nearIdenticalCutoff = 1.0e-4;
+  FOR_ATOMS_OF_MOL(a, mol) {
+    FOR_ATOMS_OF_MOL(b, mol) {
+      if (a->GetIdx() >= b->GetIdx())
+        continue;
+      const double distance = (a->GetVector() - b->GetVector()).length();
+      OB_REQUIRE(distance >= nearIdenticalCutoff);
+      if (!mol.GetBond(a->GetIdx(), b->GetIdx()))
+        OB_REQUIRE(distance >= minNonBondedDistanceCutoff);
+    }
+  }
+
+  OBForceField* mmff94 = OBForceField::FindForceField("MMFF94");
+  OBForceField* uff = OBForceField::FindForceField("UFF");
+  bool ffSetupOk = false;
+  OB_REQUIRE(mol.AddHydrogens());
+  if (mmff94) {
+    OBForceField* mmff94Instance = mmff94->MakeNewInstance();
+    if (mmff94Instance) {
+      ffSetupOk = mmff94Instance->Setup(mol);
+      delete mmff94Instance;
+    }
+  }
+  if (!ffSetupOk && uff) {
+    OBForceField* uffInstance = uff->MakeNewInstance();
+    if (uffInstance) {
+      ffSetupOk = uffInstance->Setup(mol);
+      delete uffInstance;
+    }
+  }
+  if (mmff94 || uff)
+    OB_REQUIRE(ffSetupOk);
+
+  return true;
+}
+
+bool doBuilderGeometrySanityBiarylTest(double minNonBondedDistanceCutoff)
+{
+  cout << " Geometry sanity for phenylpyridine-like biaryl topology" << endl;
+
+  testCount++;
+
+  OBMol mol;
+  for (int i = 0; i < 11; ++i) {
+    OBAtom* a = mol.NewAtom();
+    OB_REQUIRE(a != nullptr);
+    a->SetAtomicNum(6);
+  }
+  OBAtom* n = mol.NewAtom();
+  OB_REQUIRE(n != nullptr);
+  n->SetAtomicNum(7);
+
+  // Phenyl ring
+  OB_REQUIRE(mol.AddBond(1, 2, 1));
+  OB_REQUIRE(mol.AddBond(2, 3, 2));
+  OB_REQUIRE(mol.AddBond(3, 4, 1));
+  OB_REQUIRE(mol.AddBond(4, 5, 2));
+  OB_REQUIRE(mol.AddBond(5, 6, 1));
+  OB_REQUIRE(mol.AddBond(6, 1, 2));
+  // Pyridyl ring
+  OB_REQUIRE(mol.AddBond(7, 8, 1));
+  OB_REQUIRE(mol.AddBond(8, 9, 2));
+  OB_REQUIRE(mol.AddBond(9, 10, 1));
+  OB_REQUIRE(mol.AddBond(10, 11, 2));
+  OB_REQUIRE(mol.AddBond(11, 12, 1));
+  OB_REQUIRE(mol.AddBond(12, 7, 2));
+  // Biaryl linkage
+  OB_REQUIRE(mol.AddBond(1, 7, 1));
+  mol.SetDimension(0);
+
+  const int inputDimension = mol.GetDimension();
+
+  OBBuilder builder;
+  OB_REQUIRE(builder.Build(mol, false));
+  OB_REQUIRE(mol.GetDimension() == 3);
+  OB_REQUIRE(inputDimension != 3);
+
+  const double nearIdenticalCutoff = 1.0e-4;
+  FOR_ATOMS_OF_MOL(a, mol) {
+    FOR_ATOMS_OF_MOL(b, mol) {
+      if (a->GetIdx() >= b->GetIdx())
+        continue;
+      const double distance = (a->GetVector() - b->GetVector()).length();
+      OB_REQUIRE(distance >= nearIdenticalCutoff);
+      if (!mol.GetBond(a->GetIdx(), b->GetIdx()))
+        OB_REQUIRE(distance >= minNonBondedDistanceCutoff);
+    }
+  }
+
+  OBForceField* mmff94 = OBForceField::FindForceField("MMFF94");
+  OBForceField* uff = OBForceField::FindForceField("UFF");
+  bool ffSetupOk = false;
+  OB_REQUIRE(mol.AddHydrogens());
+  if (mmff94) {
+    OBForceField* mmff94Instance = mmff94->MakeNewInstance();
+    if (mmff94Instance) {
+      ffSetupOk = mmff94Instance->Setup(mol);
+      delete mmff94Instance;
+    }
+  }
+  if (!ffSetupOk && uff) {
+    OBForceField* uffInstance = uff->MakeNewInstance();
+    if (uffInstance) {
+      ffSetupOk = uffInstance->Setup(mol);
+      delete uffInstance;
+    }
+  }
+  if (mmff94 || uff)
+    OB_REQUIRE(ffSetupOk);
+
+  return true;
 }
 
 int buildertest(int argc, char* argv[])
@@ -156,6 +296,14 @@ int buildertest(int argc, char* argv[])
   case 6:
     // from Hubertus van Dam -- #2144
     OB_ASSERT( doSMILESBuilderTest("OC1(C2=CN(CC3=CC=CC=C3F)N=N2)CCOC1") );
+    break;
+  case 7:
+    // Regression: ensure rough-3D output is non-degenerate and forcefield-optimizable
+    OB_ASSERT( doBuilderGeometrySanityTest(0.5) );
+    break;
+  case 8:
+    // Regression: aromatic biaryl-like system (phenylpyridine) must not collapse in rough-3D build
+    OB_ASSERT( doBuilderGeometrySanityBiarylTest(0.6) );
     break;
   default:
     cout << "Test number " << choice << " does not exist!\n";

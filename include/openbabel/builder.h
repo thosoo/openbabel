@@ -22,6 +22,7 @@ GNU General Public License for more details.
 
 #include <vector>
 #include <string>
+#include <cstddef>
 #include <map>
 
 #include <list>
@@ -74,7 +75,7 @@ namespace OpenBabel
       void AddRingFragment(OBSmartsPattern *sp, const std::vector<vector3> &coords);
       //! Load fragment info from file, if is it has not already been done
       void LoadFragments();
-      std::vector<vector3> GetFragmentCoord(std::string smiles);
+      std::vector<vector3> GetFragmentCoord(std::string smiles, std::size_t expectedCount = 0);
 
       /*! Get the position for a new neighbour on atom.  Returns
        * non-finite vector if there is no reasonable location.
