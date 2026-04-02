@@ -104,26 +104,19 @@ bool doSMILESBuilderTest(string smiles)
   return (mol.Has3D() && mol.HasNonZeroCoords());
 }
 
-bool doBuilderGeometrySanityTest(double minNonBondedDistanceCutoff)
+bool doBuilderGeometrySanityFromSmilesTest(const std::string& smiles,
+                                           const std::string& label,
+                                           double minNonBondedDistanceCutoff)
 {
-  cout << " Geometry sanity for manually constructed bicyclic-like topology" << endl;
+  cout << " Geometry sanity for " << label << " from SMILES " << smiles << endl;
 
   testCount++;
 
   OBMol mol;
-  for (int i = 0; i < 6; ++i) {
-    OBAtom* a = mol.NewAtom();
-    OB_REQUIRE(a != nullptr);
-    a->SetAtomicNum(6);
-  }
-  // Ring: 1-2-3-4-5-6-1
-  OB_REQUIRE(mol.AddBond(1, 2, 1));
-  OB_REQUIRE(mol.AddBond(2, 3, 1));
-  OB_REQUIRE(mol.AddBond(3, 4, 1));
-  OB_REQUIRE(mol.AddBond(4, 5, 1));
-  OB_REQUIRE(mol.AddBond(5, 6, 1));
-  OB_REQUIRE(mol.AddBond(6, 1, 1));
-  mol.SetDimension(0);
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInAndOutFormats("smi", "can"));
+  OB_REQUIRE(conv.ReadString(&mol, smiles));
+  OB_REQUIRE(mol.GetDimension() == 0);
 
   const int inputDimension = mol.GetDimension();
 
@@ -143,106 +136,18 @@ bool doBuilderGeometrySanityTest(double minNonBondedDistanceCutoff)
         OB_REQUIRE(distance >= minNonBondedDistanceCutoff);
     }
   }
-
-  OBForceField* mmff94 = OBForceField::FindForceField("MMFF94");
-  OBForceField* uff = OBForceField::FindForceField("UFF");
-  bool ffSetupOk = false;
-  OB_REQUIRE(mol.AddHydrogens());
-  if (mmff94) {
-    OBForceField* mmff94Instance = mmff94->MakeNewInstance();
-    if (mmff94Instance) {
-      ffSetupOk = mmff94Instance->Setup(mol);
-      delete mmff94Instance;
-    }
-  }
-  if (!ffSetupOk && uff) {
-    OBForceField* uffInstance = uff->MakeNewInstance();
-    if (uffInstance) {
-      ffSetupOk = uffInstance->Setup(mol);
-      delete uffInstance;
-    }
-  }
-  if (mmff94 || uff)
-    OB_REQUIRE(ffSetupOk);
 
   return true;
 }
 
+bool doBuilderGeometrySanityTest(double minNonBondedDistanceCutoff)
+{
+  return doBuilderGeometrySanityFromSmilesTest("C1CCCCC1", "cyclohexane", minNonBondedDistanceCutoff);
+}
+
 bool doBuilderGeometrySanityBiarylTest(double minNonBondedDistanceCutoff)
 {
-  cout << " Geometry sanity for phenylpyridine-like biaryl topology" << endl;
-
-  testCount++;
-
-  OBMol mol;
-  for (int i = 0; i < 11; ++i) {
-    OBAtom* a = mol.NewAtom();
-    OB_REQUIRE(a != nullptr);
-    a->SetAtomicNum(6);
-  }
-  OBAtom* n = mol.NewAtom();
-  OB_REQUIRE(n != nullptr);
-  n->SetAtomicNum(7);
-
-  // Phenyl ring
-  OB_REQUIRE(mol.AddBond(1, 2, 1));
-  OB_REQUIRE(mol.AddBond(2, 3, 2));
-  OB_REQUIRE(mol.AddBond(3, 4, 1));
-  OB_REQUIRE(mol.AddBond(4, 5, 2));
-  OB_REQUIRE(mol.AddBond(5, 6, 1));
-  OB_REQUIRE(mol.AddBond(6, 1, 2));
-  // Pyridyl ring
-  OB_REQUIRE(mol.AddBond(7, 8, 1));
-  OB_REQUIRE(mol.AddBond(8, 9, 2));
-  OB_REQUIRE(mol.AddBond(9, 10, 1));
-  OB_REQUIRE(mol.AddBond(10, 11, 2));
-  OB_REQUIRE(mol.AddBond(11, 12, 1));
-  OB_REQUIRE(mol.AddBond(12, 7, 2));
-  // Biaryl linkage
-  OB_REQUIRE(mol.AddBond(1, 7, 1));
-  mol.SetDimension(0);
-
-  const int inputDimension = mol.GetDimension();
-
-  OBBuilder builder;
-  OB_REQUIRE(builder.Build(mol, false));
-  OB_REQUIRE(mol.GetDimension() == 3);
-  OB_REQUIRE(inputDimension != 3);
-
-  const double nearIdenticalCutoff = 1.0e-4;
-  FOR_ATOMS_OF_MOL(a, mol) {
-    FOR_ATOMS_OF_MOL(b, mol) {
-      if (a->GetIdx() >= b->GetIdx())
-        continue;
-      const double distance = (a->GetVector() - b->GetVector()).length();
-      OB_REQUIRE(distance >= nearIdenticalCutoff);
-      if (!mol.GetBond(a->GetIdx(), b->GetIdx()))
-        OB_REQUIRE(distance >= minNonBondedDistanceCutoff);
-    }
-  }
-
-  OBForceField* mmff94 = OBForceField::FindForceField("MMFF94");
-  OBForceField* uff = OBForceField::FindForceField("UFF");
-  bool ffSetupOk = false;
-  OB_REQUIRE(mol.AddHydrogens());
-  if (mmff94) {
-    OBForceField* mmff94Instance = mmff94->MakeNewInstance();
-    if (mmff94Instance) {
-      ffSetupOk = mmff94Instance->Setup(mol);
-      delete mmff94Instance;
-    }
-  }
-  if (!ffSetupOk && uff) {
-    OBForceField* uffInstance = uff->MakeNewInstance();
-    if (uffInstance) {
-      ffSetupOk = uffInstance->Setup(mol);
-      delete uffInstance;
-    }
-  }
-  if (mmff94 || uff)
-    OB_REQUIRE(ffSetupOk);
-
-  return true;
+  return doBuilderGeometrySanityFromSmilesTest("c1ccccc1-c2ccccn2", "phenylpyridine-like biaryl", minNonBondedDistanceCutoff);
 }
 
 int buildertest(int argc, char* argv[])
