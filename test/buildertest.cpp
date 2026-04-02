@@ -147,7 +147,6 @@ bool doBuilderGeometrySanityTest(double minNonBondedDistanceCutoff)
   OBForceField* mmff94 = OBForceField::FindForceField("MMFF94");
   OBForceField* uff = OBForceField::FindForceField("UFF");
   bool ffSetupOk = false;
-  clearMolFlags(mol);
   OB_REQUIRE(mol.AddHydrogens());
   if (mmff94) {
     OBForceField* mmff94Instance = mmff94->MakeNewInstance();
@@ -225,7 +224,6 @@ bool doBuilderGeometrySanityBiarylTest(double minNonBondedDistanceCutoff)
   OBForceField* mmff94 = OBForceField::FindForceField("MMFF94");
   OBForceField* uff = OBForceField::FindForceField("UFF");
   bool ffSetupOk = false;
-  clearMolFlags(mol);
   OB_REQUIRE(mol.AddHydrogens());
   if (mmff94) {
     OBForceField* mmff94Instance = mmff94->MakeNewInstance();
