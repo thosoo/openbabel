@@ -32,11 +32,15 @@ GNU General Public License for more details.
 #include <openbabel/locale.h>
 #include <openbabel/distgeom.h>
 #include <openbabel/elements.h>
+#include <openbabel/forcefield.h>
 
 #include <openbabel/stereo/stereo.h>
 #include <openbabel/stereo/cistrans.h>
 #include <openbabel/stereo/tetrahedral.h>
 #include <openbabel/stereo/squareplanar.h>
+
+#include <cstdlib>
+#include <limits>
 /* OBBuilder::GetNewBondVector():
  * - is based on OBAtom::GetNewBondVector()
  * - but: when extending a long chain all the bonds are trans
@@ -50,6 +54,76 @@ using namespace std;
 
 namespace OpenBabel
 {
+  namespace
+  {
+    bool BuilderDebugEnabled()
+    {
+      const char* env = std::getenv("OB_BUILDER_DEBUG");
+      return env != nullptr && env[0] != '\0' && env[0] != '0';
+    }
+
+    struct GeometryStats
+    {
+      bool hasAtoms;
+      bool hasNearIdenticalCoords;
+      double minDistance;
+      vector3 minCoord;
+      vector3 maxCoord;
+      unsigned int nearIdenticalPairs;
+    };
+
+    GeometryStats GetGeometryStats(const OBMol &mol, double nearIdenticalCutoff = 1.0e-4)
+    {
+      GeometryStats stats;
+      stats.hasAtoms = false;
+      stats.hasNearIdenticalCoords = false;
+      stats.minDistance = std::numeric_limits<double>::max();
+      stats.minCoord = vector3(0.0, 0.0, 0.0);
+      stats.maxCoord = vector3(0.0, 0.0, 0.0);
+      stats.nearIdenticalPairs = 0;
+
+      if (mol.NumAtoms() == 0)
+        return stats;
+
+      stats.hasAtoms = true;
+      bool first = true;
+      FOR_ATOMS_OF_MOL(a, mol) {
+        vector3 v = a->GetVector();
+        if (first) {
+          stats.minCoord = v;
+          stats.maxCoord = v;
+          first = false;
+        } else {
+          stats.minCoord.Set(std::min(stats.minCoord.x(), v.x()),
+                             std::min(stats.minCoord.y(), v.y()),
+                             std::min(stats.minCoord.z(), v.z()));
+          stats.maxCoord.Set(std::max(stats.maxCoord.x(), v.x()),
+                             std::max(stats.maxCoord.y(), v.y()),
+                             std::max(stats.maxCoord.z(), v.z()));
+        }
+      }
+
+      for (unsigned int i = 1; i <= mol.NumAtoms(); ++i) {
+        const vector3 vi = mol.GetAtom(i)->GetVector();
+        for (unsigned int j = i + 1; j <= mol.NumAtoms(); ++j) {
+          const vector3 vj = mol.GetAtom(j)->GetVector();
+          const double d = (vi - vj).length();
+          if (d < stats.minDistance)
+            stats.minDistance = d;
+          if (d < nearIdenticalCutoff) {
+            stats.hasNearIdenticalCoords = true;
+            ++stats.nearIdenticalPairs;
+          }
+        }
+      }
+
+      if (mol.NumAtoms() < 2)
+        stats.minDistance = 0.0;
+
+      return stats;
+    }
+  }
+
   /** \class OBBuilder builder.h <openbabel/builder.h>
       \brief Class for 3D structure generation
       \since version 2.2
@@ -114,6 +188,12 @@ namespace OpenBabel
       _rigid_fragments_index[smiles] = index;
     }
 
+    if (BuilderDebugEnabled()) {
+      std::stringstream ss;
+      ss << "Loaded rigid fragment index entries: " << _rigid_fragments.size();
+      obErrorLog.ThrowError(__FUNCTION__, ss.str(), obDebug);
+    }
+
     if (OpenDatafile(ifs, "ring-fragments.txt").length() == 0) {
       obErrorLog.ThrowError(__FUNCTION__, "Cannot open ring-fragments.txt", obError);
       return;
@@ -150,6 +230,12 @@ namespace OpenBabel
     // return the locale to the original one
     obLocale.RestoreLocale();
 
+    if (BuilderDebugEnabled()) {
+      std::stringstream ss;
+      ss << "Loaded ring fragments: " << _ring_fragments.size();
+      obErrorLog.ThrowError(__FUNCTION__, ss.str(), obDebug);
+    }
+
     /*if (OpenDatafile(ifs, "torsion.txt").length() == 0) {
       obErrorLog.ThrowError(__FUNCTION__, "Cannot open torsion.txt", obError);
       return;
@@ -161,9 +247,13 @@ namespace OpenBabel
     */
   }
 
-  std::vector<vector3> OBBuilder::GetFragmentCoord(std::string smiles) {
-    if (_rigid_fragments_cache.count(smiles) > 0) {
-      return _rigid_fragments_cache[smiles];
+  std::vector<vector3> OBBuilder::GetFragmentCoord(std::string smiles, std::size_t expectedCount) {
+    std::map<std::string, std::vector<vector3> >::iterator cacheIt =
+      _rigid_fragments_cache.find(smiles);
+    if (cacheIt != _rigid_fragments_cache.end()) {
+      if (expectedCount == 0 || cacheIt->second.size() == expectedCount)
+        return cacheIt->second;
+      _rigid_fragments_cache.erase(cacheIt);
     }
 
     std::vector<vector3> coords;
@@ -172,10 +262,21 @@ namespace OpenBabel
     }
 
     ifstream ifs;
-    if (OpenDatafile(ifs, "rigid-fragments.txt").length() == 0) {
+    const std::string rigidFragmentsPath = OpenDatafile(ifs, "rigid-fragments.txt");
+    if (rigidFragmentsPath.length() == 0) {
       obErrorLog.ThrowError(__FUNCTION__, "Cannot open rigid-fragments.txt", obError);
       return coords;
     }
+
+    ifs.close();
+    ifs.clear();
+    ifs.open(rigidFragmentsPath.c_str(), ios_base::in | ios_base::binary);
+    if (!ifs) {
+      obErrorLog.ThrowError(__FUNCTION__, "Cannot reopen rigid-fragments.txt in binary mode", obError);
+      return coords;
+    }
+
+    obLocale.SetLocale();
 
     ifs.clear();
     ifs.seekg(_rigid_fragments_index[smiles]);
@@ -196,10 +297,73 @@ namespace OpenBabel
       }
     }
 
+    const bool indexedReadInvalid =
+      coords.empty() || (expectedCount > 0 && coords.size() != expectedCount);
+
+    // If indexed seek/read did not return a valid coordinate block (e.g.
+    // offset/text-mode mismatch from platform-specific line ending conversions),
+    // resync by scanning for the requested fragment tag and read coordinates from there.
+    if (indexedReadInvalid) {
+      if (expectedCount > 0 && !coords.empty() && coords.size() != expectedCount) {
+        std::stringstream ss;
+        ss << "Indexed rigid fragment read for '" << smiles
+           << "' returned unexpected coordinate count (coords=" << coords.size()
+           << ", expected=" << expectedCount << "), trying sequential resync.";
+        obErrorLog.ThrowError(__FUNCTION__, ss.str(), obWarning);
+      }
+      coords.clear();
+      hasAllZeroCoords = true;
+    }
+
+    // If indexed seek/read did not return coordinates (e.g. offset/text-mode mismatch
+    // from platform-specific line ending conversions), resync by scanning for the
+    // requested fragment tag and read coordinates from there.
+    if (indexedReadInvalid) {
+      ifs.clear();
+      ifs.seekg(0);
+      bool foundFragment = false;
+      while (ifs.getline(buffer, BUFF_SIZE)) {
+        tokenize(vs, buffer);
+        if (!foundFragment) {
+          if (vs.size() == 1 && vs[0] == smiles)
+            foundFragment = true;
+          continue;
+        }
+        if (vs.size() == 4) {
+          vector3 coord(atof(vs[1].c_str()), atof(vs[2].c_str()), atof(vs[3].c_str()));
+          if (fabs(coord.x()) > 10e-8 ||
+              fabs(coord.y()) > 10e-8 ||
+              fabs(coord.z()) > 10e-8)
+            hasAllZeroCoords = false;
+          coords.push_back(coord);
+        } else if (vs.size() == 1) {
+          break;
+        }
+      }
+    }
+
+    obLocale.RestoreLocale();
+
+    if (coords.empty()) {
+      std::stringstream ss;
+      ss << "Failed to read coordinates for rigid fragment '" << smiles << "'.";
+      obErrorLog.ThrowError(__FUNCTION__, ss.str(), obWarning);
+      return coords;
+    }
+
     if (hasAllZeroCoords) {
       std::stringstream ss;
       ss << "Rigid fragment " << smiles << " in rigid-fragments.txt has all zero coordinates.";
       obErrorLog.ThrowError(__FUNCTION__, ss.str(), obError);
+    }
+
+    if (expectedCount == 0 || coords.size() == expectedCount)
+      _rigid_fragments_cache[smiles] = coords;
+
+    if (BuilderDebugEnabled()) {
+      std::stringstream ss;
+      ss << "Fragment '" << smiles << "' coordinates read: " << coords.size();
+      obErrorLog.ThrowError(__FUNCTION__, ss.str(), obDebug);
     }
 
     return coords;
@@ -1072,6 +1236,17 @@ namespace OpenBabel
   //                                           b) Not first atom: Find position and place atom
   bool OBBuilder::Build(OBMol &mol, bool stereoWarnings)
   {
+    const bool debugBuild = BuilderDebugEnabled();
+    if (debugBuild) {
+      std::stringstream ss;
+      ss << "Build start: title='" << mol.GetTitle()
+         << "' formula='" << mol.GetFormula()
+         << "' atoms=" << mol.NumAtoms()
+         << " bonds=" << mol.NumBonds()
+         << " input_dimension=" << mol.GetDimension();
+      obErrorLog.ThrowError(__FUNCTION__, ss.str(), obDebug);
+    }
+
     OBBitVec vdone; // Atoms that are done, need no further manipulation.
     OBBitVec vfrag; // Atoms that are part of a fragment found in the database.
                     // These atoms have coordinates, but the fragment still has
@@ -1146,7 +1321,6 @@ namespace OpenBabel
         if (!sp.Init(fragment_smiles)) {
           obErrorLog.ThrowError(__FUNCTION__, " Could not parse SMARTS from fragment", obInfo);
         } else if (sp.Match(mol)) { // for all matches
-          isMatchRigid = true;
           mlist = sp.GetUMapList();
           for (j = mlist.begin(); j != mlist.end(); ++j) {
             // Have any atoms of this match already been added?
@@ -1158,11 +1332,21 @@ namespace OpenBabel
               }
             if (alreadydone) continue;
 
+            std::vector<vector3> coords = GetFragmentCoord(fragment_smiles, j->size());
+            if (coords.size() != j->size()) {
+              std::stringstream ss;
+              ss << "Skipping rigid fragment '" << fragment_smiles
+                 << "' due to coordinate count mismatch (coords=" << coords.size()
+                 << ", match=" << j->size() << ").";
+              obErrorLog.ThrowError(__FUNCTION__, ss.str(), obWarning);
+              continue;
+            }
+
+            isMatchRigid = true;
             for (k = j->begin(); k != j->end(); ++k)
               vfrag.SetBitOn(*k); // Set vfrag for all atoms of fragment
 
             int counter;
-            std::vector<vector3> coords = GetFragmentCoord(fragment_smiles);
             for (k = j->begin(), counter=0; k != j->end(); ++k, ++counter) { // for all atoms of the fragment
               // set coordinates for atoms
               OBAtom *atom = workMol.GetAtom(*k);
@@ -1385,6 +1569,37 @@ namespace OpenBabel
     }
     if(isNanExist)
       obErrorLog.ThrowError(__FUNCTION__, "There exists NaN in calculated coordinates.", obWarning);
+
+    if (debugBuild) {
+      GeometryStats stats = GetGeometryStats(mol);
+      std::stringstream ss;
+      ss << "Build end: success=" << (success ? "true" : "false")
+         << " near_identical_coords=" << (stats.hasNearIdenticalCoords ? "true" : "false")
+         << " near_identical_pairs=" << stats.nearIdenticalPairs
+         << " min_interatomic_distance=" << stats.minDistance
+         << " bbox_min=(" << stats.minCoord.x() << ", " << stats.minCoord.y() << ", " << stats.minCoord.z() << ")"
+         << " bbox_max=(" << stats.maxCoord.x() << ", " << stats.maxCoord.y() << ", " << stats.maxCoord.z() << ")";
+      obErrorLog.ThrowError(__FUNCTION__, ss.str(), obDebug);
+
+      bool mmffSetup = false;
+      if (OBForceField *mmff94Proto = OBForceField::FindForceField("MMFF94")) {
+        if (OBForceField *mmff94 = mmff94Proto->MakeNewInstance()) {
+          mmffSetup = mmff94->Setup(mol);
+          delete mmff94;
+        }
+      }
+      bool uffSetup = false;
+      if (OBForceField *uffProto = OBForceField::FindForceField("UFF")) {
+        if (OBForceField *uff = uffProto->MakeNewInstance()) {
+          uffSetup = uff->Setup(mol);
+          delete uff;
+        }
+      }
+      std::stringstream ffss;
+      ffss << "Force field setup after Build: MMFF94=" << (mmffSetup ? "true" : "false")
+           << " UFF=" << (uffSetup ? "true" : "false");
+      obErrorLog.ThrowError(__FUNCTION__, ffss.str(), obDebug);
+    }
 
     return success;
   }

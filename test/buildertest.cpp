@@ -3,6 +3,7 @@
 #include <openbabel/obconversion.h>
 #include <openbabel/builder.h>
 #include <openbabel/forcefield.h>
+#include <openbabel/obiter.h>
 
 #include <iostream>
 #include <string>
@@ -94,15 +95,59 @@ bool doSMILESBuilderTest(string smiles)
 
   OBMol mol;
   OBConversion conv;
-  OBFormat *smilesFormat = conv.FindFormat("smi");
-  OB_REQUIRE(smilesFormat);
-  OB_REQUIRE(conv.SetInFormat(smilesFormat));
+  OB_REQUIRE(conv.SetInAndOutFormats("smi", "can"));
 
   OB_REQUIRE(conv.ReadString(&mol, smiles));
 
   OBBuilder builder;
   OB_REQUIRE(builder.Build(mol, false)); // some stereo errors are known
   return (mol.Has3D() && mol.HasNonZeroCoords());
+}
+
+bool doBuilderGeometrySanityFromSmilesTest(const std::string& smiles,
+                                           const std::string& label,
+                                           double minNonBondedDistanceCutoff)
+{
+  cout << " Geometry sanity for " << label << " from SMILES " << smiles << endl;
+
+  testCount++;
+
+  OBMol mol;
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInAndOutFormats("smi", "can"));
+  OB_REQUIRE(conv.ReadString(&mol, smiles));
+  OB_REQUIRE(mol.GetDimension() == 0);
+
+  const int inputDimension = mol.GetDimension();
+
+  OBBuilder builder;
+  OB_REQUIRE(builder.Build(mol, false));
+  OB_REQUIRE(mol.GetDimension() == 3);
+  OB_REQUIRE(inputDimension != 3);
+
+  const double nearIdenticalCutoff = 1.0e-4;
+  FOR_ATOMS_OF_MOL(a, mol) {
+    FOR_ATOMS_OF_MOL(b, mol) {
+      if (a->GetIdx() >= b->GetIdx())
+        continue;
+      const double distance = (a->GetVector() - b->GetVector()).length();
+      OB_REQUIRE(distance >= nearIdenticalCutoff);
+      if (!mol.GetBond(a->GetIdx(), b->GetIdx()))
+        OB_REQUIRE(distance >= minNonBondedDistanceCutoff);
+    }
+  }
+
+  return true;
+}
+
+bool doBuilderGeometrySanityTest(double minNonBondedDistanceCutoff)
+{
+  return doBuilderGeometrySanityFromSmilesTest("C1CCCCC1", "cyclohexane", minNonBondedDistanceCutoff);
+}
+
+bool doBuilderGeometrySanityBiarylTest(double minNonBondedDistanceCutoff)
+{
+  return doBuilderGeometrySanityFromSmilesTest("c1ccccc1-c2ccccn2", "phenylpyridine-like biaryl", minNonBondedDistanceCutoff);
 }
 
 int buildertest(int argc, char* argv[])
@@ -156,6 +201,14 @@ int buildertest(int argc, char* argv[])
   case 6:
     // from Hubertus van Dam -- #2144
     OB_ASSERT( doSMILESBuilderTest("OC1(C2=CN(CC3=CC=CC=C3F)N=N2)CCOC1") );
+    break;
+  case 7:
+    // Regression: ensure rough-3D output is non-degenerate and forcefield-optimizable
+    OB_ASSERT( doBuilderGeometrySanityTest(0.5) );
+    break;
+  case 8:
+    // Regression: aromatic biaryl-like system (phenylpyridine) must not collapse in rough-3D build
+    OB_ASSERT( doBuilderGeometrySanityBiarylTest(0.6) );
     break;
   default:
     cout << "Test number " << choice << " does not exist!\n";
