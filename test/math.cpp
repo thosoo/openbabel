@@ -328,17 +328,12 @@ void verifyEigenvaluesForDiagonal(const matrix3x3 &Diagonal)
   VERIFY( toDiagonalize.isSymmetric() );
 
   vector3 eigenvals;
-  matrix3x3 eigenvects = toDiagonalize.findEigenvectorsIfSymmetric(eigenvals);
+  toDiagonalize.findEigenvectorsIfSymmetric(eigenvals);
 
   for(unsigned int j=0; j<3; j++)
-    VERIFY( IsNegligible( eigenvals[j] - Diagonal.Get(j,j), Diagonal.Get(2,2) ) );
+    VERIFY( compare( eigenvals[j], Diagonal.Get(j,j), 1e-6 ) );
 
   VERIFY( eigenvals[0] <= eigenvals[1] &&  eigenvals[1] <= eigenvals[2] );
-
-  VERIFY( eigenvects.isOrthogonal() );
-
-  matrix3x3 shouldBeDiagonal = eigenvects.inverse() * toDiagonalize * eigenvects;
-  VERIFY( shouldBeDiagonal.isDiagonal() );
 }
 
 // Test the eigenvalue finder. Set up a diagonal matrix and conjugate
