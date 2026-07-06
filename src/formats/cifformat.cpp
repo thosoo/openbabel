@@ -159,10 +159,10 @@ namespace OpenBabel
   }
   struct ADPTensor
   {
-    ADPTensor(): complete(false), valid(false), hasCart(false), inputIsB(false), hasUIso(false), hasBIso(false) { for (int i=0;i<6;++i) { u[i]=0.0; ucart[i]=0.0; } uIso = bIso = 0.0; }
+    ADPTensor(): complete(false), valid(false), hasCart(false), inputIsB(false), hasUIso(false), hasBIso(false), hasADPType(false) { for (int i=0;i<6;++i) { u[i]=0.0; ucart[i]=0.0; } uIso = bIso = 0.0; }
     double u[6], ucart[6], uIso, bIso;
-    bool complete, valid, hasCart, inputIsB, hasUIso, hasBIso;
-    std::string isoSource;
+    bool complete, valid, hasCart, inputIsB, hasUIso, hasBIso, hasADPType;
+    std::string isoSource, adpType;
   };
 
   static const char* adpNames[6] = { "11", "22", "33", "12", "13", "23" };
@@ -207,6 +207,7 @@ namespace OpenBabel
     if (adp.hasUIso) setPairDoubleString(atom, "adp_U_iso_or_equiv", adp.uIso);
     if (adp.hasBIso) setPairDoubleString(atom, "adp_B_iso_or_equiv", adp.bIso);
     if (adp.hasUIso || adp.hasBIso) setPairString(atom, "adp_U_iso_source", adp.isoSource);
+    if (adp.hasADPType) setPairString(atom, "adp_type", adp.adpType);
   }
 
   static void computeADPCartesian(ADPTensor& adp, double alpha, double beta, double gamma)
@@ -963,7 +964,7 @@ namespace OpenBabel
           double v;
           if (uiso != loop->second.end() && i < uiso->second.size() && parseCIFDouble(uiso->second[i], v)) { adp.uIso=v; adp.hasUIso=true; adp.isoSource="U_iso_or_equiv"; }
           if (biso != loop->second.end() && i < biso->second.size() && parseCIFDouble(biso->second[i], v)) { adp.bIso=v; adp.hasBIso=true; if (!adp.hasUIso) { adp.uIso=v*bToU; adp.hasUIso=true; adp.isoSource="B_iso_or_equiv"; } }
-          if (adptype != loop->second.end() && i < adptype->second.size() && !adptype->second[i].empty()) adp.isoSource=adptype->second[i];
+          if (adptype != loop->second.end() && i < adptype->second.size() && !adptype->second[i].empty() && adptype->second[i] != "." && adptype->second[i] != "?") { adp.adpType=adptype->second[i]; adp.hasADPType=true; }
         }
       }
     }

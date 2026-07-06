@@ -170,6 +170,39 @@ static void testCIFADPWriterUsesAtomSiteLabels()
   OB_ASSERT(near(pairAsDouble(reread.GetAtom(1), "adp_U_11"), 0.010));
 }
 
+static void testCIFADPTypeMetadata()
+{
+  const string cif =
+    "data_cif_adp_type_test\n"
+    "_cell_length_a 10.0\n"
+    "_cell_length_b 10.0\n"
+    "_cell_length_c 10.0\n"
+    "_cell_angle_alpha 90\n"
+    "_cell_angle_beta 90\n"
+    "_cell_angle_gamma 90\n"
+    "_space_group_name_H-M_alt 'P 1'\n"
+    "loop_\n"
+    "  _atom_site_label\n"
+    "  _atom_site_type_symbol\n"
+    "  _atom_site_fract_x\n"
+    "  _atom_site_fract_y\n"
+    "  _atom_site_fract_z\n"
+    "  _atom_site_U_iso_or_equiv\n"
+    "  _atom_site_adp_type\n"
+    "  C1 C 0.10000 0.20000 0.30000 0.0123 Uani\n";
+
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInFormat("cif"));
+  OBMol mol;
+  OB_REQUIRE(conv.ReadString(&mol, cif));
+  OB_COMPARE(mol.NumAtoms(), 1u);
+
+  OBAtom* atom = mol.GetAtom(1);
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_iso_or_equiv"), 0.0123));
+  OB_COMPARE(pairAsString(atom, "adp_U_iso_source"), string("U_iso_or_equiv"));
+  OB_COMPARE(pairAsString(atom, "adp_type"), string("Uani"));
+}
+
 int cifadptest(int argc, char* argv[])
 {
 #ifdef FORMATDIR
@@ -184,6 +217,7 @@ int cifadptest(int argc, char* argv[])
   case 1: testMMCIFAnisotropIdMatching(); break;
   case 2: testCIFADPWriterUsesAtomSiteLabels(); break;
   case 3: testMMCIFAnisotropBTensorConversion(); break;
+  case 4: testCIFADPTypeMetadata(); break;
   default: return -1;
   }
   return 0;
