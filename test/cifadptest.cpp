@@ -56,8 +56,9 @@ static void testMMCIFAnisotropIdMatching()
     "_atom_site.Cartn_y\n"
     "_atom_site.Cartn_z\n"
     "_atom_site.occupancy\n"
-    "1 C C1 1.0 2.0 3.0 1.0\n"
-    "2 O O1 4.0 5.0 6.0 1.0\n"
+    "_atom_site.adp_type\n"
+    "A001 C C1 1.0 2.0 3.0 1.0 Uani\n"
+    "A002 O O1 4.0 5.0 6.0 1.0 Uani\n"
     "\n"
     "loop_\n"
     "_atom_site_anisotrop.id\n"
@@ -68,8 +69,8 @@ static void testMMCIFAnisotropIdMatching()
     "_atom_site_anisotrop.U[2][2]\n"
     "_atom_site_anisotrop.U[2][3]\n"
     "_atom_site_anisotrop.U[3][3]\n"
-    "2 O 0.040 0.001 0.002 0.050 0.003 0.060\n"
-    "1 C 0.010 0.004 0.005 0.020 0.006 0.030\n";
+    "A002 O 0.040 0.001 0.002 0.050 0.003 0.060\n"
+    "A001 C 0.010 0.004 0.005 0.020 0.006 0.030\n";
 
   OBConversion conv;
   OB_REQUIRE(conv.SetInFormat("mmcif"));
@@ -93,6 +94,7 @@ static void testMMCIFAnisotropIdMatching()
   OB_ASSERT(near(pairAsDouble(o, "adp_U_23"), 0.003));
   OB_COMPARE(pairAsString(c, "adp_source"), string("mmcif_atom_site_anisotrop"));
   OB_COMPARE(pairAsString(c, "adp_basis"), string("cif"));
+  OB_COMPARE(pairAsString(c, "adp_type"), string("Uani"));
 }
 
 

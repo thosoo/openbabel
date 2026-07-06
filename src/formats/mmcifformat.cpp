@@ -716,7 +716,7 @@ namespace OpenBabel
            CIFResidueMap ResidueMap;
            unsigned long chain_num = 1, residue_num = 1;
            unsigned int nbc=0;
-           string residue_name, atom_label, atom_site_id, atom_site_label, tmpSymbol;
+           string residue_name, residue_atom_label, atom_site_id, atom_site_label, tmpSymbol;
            int atomicNum;
            OBPairData *label;
            while (token.type == CIFLexer::ValueToken) // Read in the Fields
@@ -727,6 +727,7 @@ namespace OpenBabel
                x = y = z = 0.0;
                atom_site_id.clear();
                atom_site_label.clear();
+               residue_atom_label.clear();
                }
              switch (columns[column_idx])
                {
@@ -842,7 +843,7 @@ namespace OpenBabel
                z = token.as_number();
                break;
              case CIFTagID::_atom_site_label_atom_id: // The atomic label within the residue
-               atom_label.assign(token.as_text);
+               residue_atom_label.assign(token.as_text);
                if (atom_type_tag == CIFTagID::_atom_site_label_atom_id)
                  {
                  for (string::iterator posx = token.as_text.begin(), posy = token.as_text.end(); posx != posy; ++ posx)
@@ -897,7 +898,7 @@ namespace OpenBabel
                { double v; if (mmParseDouble(token.as_text, v)) { mmSetD(atom, "adp_B_iso_or_equiv", v); if (!atom->HasData("adp_U_iso_or_equiv")) mmSetD(atom, "adp_U_iso_or_equiv", v/(8.0*mmCIFPi*mmCIFPi)); mmSetPair(atom, "adp_U_iso_source", "B_iso_or_equiv"); } }
                break;
              case CIFTagID::_atom_site_adp_type:
-               mmSetPair(atom, "adp_U_iso_source", token.as_text);
+               mmSetPair(atom, "adp_type", token.as_text);
                break;
              case CIFTagID::unread_CIFDataName:
              default:
@@ -911,8 +912,8 @@ namespace OpenBabel
                  atoms_by_site_id[atom_site_id] = atom;
                if (!atom_site_label.empty())
                  atoms_by_label[atom_site_label] = atom;
-               if (!atom_label.empty())
-                 atoms_by_label[atom_label] = atom;
+               if (!residue_atom_label.empty())
+                 atoms_by_label[residue_atom_label] = atom;
                if (use_residue == 2)
                  {
                  has_residue_information = true;
@@ -930,8 +931,8 @@ namespace OpenBabel
                  else
                    res = pmol->GetResidue( (* resx).second );
                  res->AddAtom(atom);
-                 if (!atom_label.empty())
-                   res->SetAtomID(atom, atom_label);
+                 if (!residue_atom_label.empty())
+                   res->SetAtomID(atom, residue_atom_label);
                  unsigned long serial_no = strtoul(atom_site_id.c_str(), nullptr, 10);
                  if (serial_no > 0)
                    res->SetSerialNum(atom, serial_no);
