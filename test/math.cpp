@@ -313,6 +313,34 @@ void randomRotation(matrix3x3 *mat, double rotAngle)
   mat->RotAboutAxisByAngle(v1, rotAngle);
 }
 
+void verifyEigenvaluesForDiagonal(const matrix3x3 &Diagonal)
+{
+  // test the isDiagonal() method
+  VERIFY( Diagonal.isDiagonal() );
+
+  matrix3x3 rndRotation;
+  randomRotation(&rndRotation, 123);
+
+  // check that rndRotation is really a rotation, i.e. that randomRotation() works
+  VERIFY( rndRotation.isOrthogonal() );
+
+  matrix3x3 toDiagonalize = rndRotation * Diagonal * rndRotation.inverse();
+  VERIFY( toDiagonalize.isSymmetric() );
+
+  vector3 eigenvals;
+  matrix3x3 eigenvects = toDiagonalize.findEigenvectorsIfSymmetric(eigenvals);
+
+  for(unsigned int j=0; j<3; j++)
+    VERIFY( IsNegligible( eigenvals[j] - Diagonal.Get(j,j), Diagonal.Get(2,2) ) );
+
+  VERIFY( eigenvals[0] <= eigenvals[1] &&  eigenvals[1] <= eigenvals[2] );
+
+  VERIFY( eigenvects.isOrthogonal() );
+
+  matrix3x3 shouldBeDiagonal = eigenvects.inverse() * toDiagonalize * eigenvects;
+  VERIFY( shouldBeDiagonal.isDiagonal() );
+}
+
 // Test the eigenvalue finder. Set up a diagonal matrix and conjugate
 // by a rotation. That way we obtain a symmetric matrix that can be
 // diagonalized. Check if the eigenvalue finder reveals the original
@@ -327,25 +355,14 @@ void testEigenvalues()
   Diagonal.Set(1, 1, Diagonal.Get(0,0)+fabs(randomizer.NextFloat()));
   Diagonal.Set(2, 2, Diagonal.Get(1,1)+fabs(randomizer.NextFloat()));
 
-  // test the isDiagonal() method
-  VERIFY( Diagonal.isDiagonal() );
+  verifyEigenvaluesForDiagonal(Diagonal);
 
-  matrix3x3 rndRotation;
-  randomRotation(&rndRotation, 123);
-
-  // check that rndRotation is really a rotation, i.e. that randomRotation() works
-  VERIFY( rndRotation.isOrthogonal() );
-  
-  matrix3x3 toDiagonalize = rndRotation * Diagonal * rndRotation.inverse();
-  VERIFY( toDiagonalize.isSymmetric() );
-  
-  vector3 eigenvals;
-  toDiagonalize.findEigenvectorsIfSymmetric(eigenvals);
-  
-  for(unsigned int j=0; j<3; j++)
-    VERIFY( IsNegligible( eigenvals[j] - Diagonal.Get(j,j), Diagonal.Get(2,2) ) );
-  
-  VERIFY( eigenvals[0] < eigenvals[1] &&  eigenvals[1] < eigenvals[2] );
+  // Repeated eigenvalues are valid for symmetric matrices, and
+  // findEigenvectorsIfSymmetric() documents non-decreasing order.
+  Diagonal.Set(0, 0, 0.25);
+  Diagonal.Set(1, 1, 0.25);
+  Diagonal.Set(2, 2, 0.75);
+  verifyEigenvaluesForDiagonal(Diagonal);
 }
 
 // Test the eigenvector finder. Set up a symmetric diagonal matrix and
