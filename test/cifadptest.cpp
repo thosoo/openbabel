@@ -92,6 +92,49 @@ static void testMMCIFAnisotropIdMatching()
   OB_ASSERT(near(pairAsDouble(o, "adp_U_13"), 0.002));
   OB_ASSERT(near(pairAsDouble(o, "adp_U_23"), 0.003));
   OB_COMPARE(pairAsString(c, "adp_source"), string("mmcif_atom_site_anisotrop"));
+  OB_COMPARE(pairAsString(c, "adp_basis"), string("cif"));
+}
+
+
+static void testMMCIFAnisotropBTensorConversion()
+{
+  const double pi = 3.141592653589793238462643383279502884;
+  const double bToU = 1.0 / (8.0 * pi * pi);
+  const string mmcif =
+    "data_mmcif_anisotrop_b_test\n"
+    "loop_\n"
+    "_atom_site.id\n"
+    "_atom_site.type_symbol\n"
+    "_atom_site.label_atom_id\n"
+    "_atom_site.Cartn_x\n"
+    "_atom_site.Cartn_y\n"
+    "_atom_site.Cartn_z\n"
+    "1 C C1 1.0 2.0 3.0\n"
+    "\n"
+    "loop_\n"
+    "_atom_site_anisotrop.id\n"
+    "_atom_site_anisotrop.B[1][1]\n"
+    "_atom_site_anisotrop.B[1][2]\n"
+    "_atom_site_anisotrop.B[1][3]\n"
+    "_atom_site_anisotrop.B[2][2]\n"
+    "_atom_site_anisotrop.B[2][3]\n"
+    "_atom_site_anisotrop.B[3][3]\n"
+    "1 0.80 0.08 0.16 1.60 0.24 2.40\n";
+
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInFormat("mmcif"));
+  OBMol mol;
+  OB_REQUIRE(conv.ReadString(&mol, mmcif));
+  OB_COMPARE(mol.NumAtoms(), 1u);
+
+  OBAtom* atom = mol.GetAtom(1);
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_11"), 0.80 * bToU));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_22"), 1.60 * bToU));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_33"), 2.40 * bToU));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_12"), 0.08 * bToU));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_13"), 0.16 * bToU));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_23"), 0.24 * bToU));
+  OB_COMPARE(pairAsString(atom, "adp_input_type"), string("B"));
 }
 
 static void testCIFADPWriterUsesAtomSiteLabels()
@@ -138,6 +181,7 @@ int cifadptest(int argc, char* argv[])
   switch (choice) {
   case 1: testMMCIFAnisotropIdMatching(); break;
   case 2: testCIFADPWriterUsesAtomSiteLabels(); break;
+  case 3: testMMCIFAnisotropBTensorConversion(); break;
   default: return -1;
   }
   return 0;
