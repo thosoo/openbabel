@@ -313,7 +313,7 @@ void randomRotation(matrix3x3 *mat, double rotAngle)
   mat->RotAboutAxisByAngle(v1, rotAngle);
 }
 
-void verifyEigenvaluesForDiagonal(const matrix3x3 &Diagonal)
+static void verifyEigenvaluesForDiagonal(const matrix3x3 &Diagonal)
 {
   // test the isDiagonal() method
   VERIFY( Diagonal.isDiagonal() );
