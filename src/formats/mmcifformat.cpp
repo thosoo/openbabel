@@ -87,7 +87,7 @@ namespace OpenBabel
      {
      unread_CIFCatName,
      atom_site,
-     atom_site_aniso,
+     atom_site_anisotrop,
      cell,
      chemical,
      chemical_formula,
@@ -118,6 +118,8 @@ namespace OpenBabel
      _atom_site_B_iso_or_equiv,
      _atom_site_adp_type,
      MAX_atom_site,
+     _atom_site_anisotrop_id,
+     _atom_site_anisotrop_type_symbol,
      _atom_site_aniso_label,
      _atom_site_aniso_U_11,
      _atom_site_aniso_U_22,
@@ -131,7 +133,7 @@ namespace OpenBabel
      _atom_site_aniso_B_12,
      _atom_site_aniso_B_13,
      _atom_site_aniso_B_23,
-     MAX_atom_site_aniso,
+     MAX_atom_site_anisotrop,
      _cell_length_a, // Unit-cell length a in Angstroms
      _cell_length_b, // Unit-cell length b in Angstroms
      _cell_length_c, // Unit-cell length c in Angstroms
@@ -210,6 +212,20 @@ namespace OpenBabel
    { "_atom_site_u_iso_or_equiv", CIFTagID::_atom_site_U_iso_or_equiv},
    { "_atom_site_b_iso_or_equiv", CIFTagID::_atom_site_B_iso_or_equiv},
    { "_atom_site_adp_type", CIFTagID::_atom_site_adp_type},
+   { "_atom_site_anisotrop_id", CIFTagID::_atom_site_anisotrop_id},
+   { "_atom_site_anisotrop_type_symbol", CIFTagID::_atom_site_anisotrop_type_symbol},
+   { "_atom_site_anisotrop_u[1][1]", CIFTagID::_atom_site_aniso_U_11},
+   { "_atom_site_anisotrop_u[2][2]", CIFTagID::_atom_site_aniso_U_22},
+   { "_atom_site_anisotrop_u[3][3]", CIFTagID::_atom_site_aniso_U_33},
+   { "_atom_site_anisotrop_u[1][2]", CIFTagID::_atom_site_aniso_U_12},
+   { "_atom_site_anisotrop_u[1][3]", CIFTagID::_atom_site_aniso_U_13},
+   { "_atom_site_anisotrop_u[2][3]", CIFTagID::_atom_site_aniso_U_23},
+   { "_atom_site_anisotrop_b[1][1]", CIFTagID::_atom_site_aniso_B_11},
+   { "_atom_site_anisotrop_b[2][2]", CIFTagID::_atom_site_aniso_B_22},
+   { "_atom_site_anisotrop_b[3][3]", CIFTagID::_atom_site_aniso_B_33},
+   { "_atom_site_anisotrop_b[1][2]", CIFTagID::_atom_site_aniso_B_12},
+   { "_atom_site_anisotrop_b[1][3]", CIFTagID::_atom_site_aniso_B_13},
+   { "_atom_site_anisotrop_b[2][3]", CIFTagID::_atom_site_aniso_B_23},
    { "_atom_site_aniso_label", CIFTagID::_atom_site_aniso_label},
    { "_atom_site_aniso_u_11", CIFTagID::_atom_site_aniso_U_11},
    { "_atom_site_aniso_u_22", CIFTagID::_atom_site_aniso_U_22},
@@ -339,8 +355,8 @@ namespace OpenBabel
      {
      if (tagid < CIFTagID::MAX_atom_site)
        catid = CIFTagID::atom_site;
-     else if (tagid < CIFTagID::MAX_atom_site_aniso)
-       catid = CIFTagID::atom_site_aniso;
+     else if (tagid < CIFTagID::MAX_atom_site_anisotrop)
+       catid = CIFTagID::atom_site_anisotrop;
      else if (tagid < CIFTagID::MAX_cell)
        catid = CIFTagID::cell;
      else if (tagid < CIFTagID::MAX_chemical)
@@ -528,7 +544,7 @@ namespace OpenBabel
 
    return lexer.good() ? 1 : -1;
  }
- struct MMCIFADP { MMCIFADP(): complete(false), valid(false), inputIsB(false) { for(int i=0;i<6;++i) u[i]=0.0; } double u[6]; bool complete, valid, inputIsB; };
+ struct MMCIFADP { MMCIFADP(): complete(false), valid(false), inputIsB(false), source("mmcif_atom_site_anisotrop") { for(int i=0;i<6;++i) u[i]=0.0; } double u[6]; bool complete, valid, inputIsB; string source; };
  static const char* mmAdpNames[6] = { "11", "22", "33", "12", "13", "23" };
  static bool mmParseDouble(const string& s, double& v) { if (s.empty() || s=="." || s=="?") return false; char* e=nullptr; v=strtod(s.c_str(), &e); return e!=s.c_str() && std::isfinite(v); }
  static bool mmValidTensor(const double u[6]) { if (u[0] < -1e-6 || u[1] < -1e-6 || u[2] < -1e-6) return false; for(int i=0;i<6;++i) if(!std::isfinite(u[i]) || fabs(u[i])>1e6) return false; double det=u[0]*u[1]*u[2]+2*u[3]*u[4]*u[5]-u[0]*u[5]*u[5]-u[1]*u[4]*u[4]-u[2]*u[3]*u[3]; return det>=-1e-6; }
@@ -545,7 +561,7 @@ namespace OpenBabel
        double n[3][3]={{1,cg,cb},{0,sg,(ca-cb*cg)/sg},{0,0,0}}; double z2=1-n[0][2]*n[0][2]-n[1][2]*n[1][2]; if(z2>=-1e-10){ n[2][2]=sqrt(std::max(0.0,z2)); double u[3][3]={{adp.u[0],adp.u[3],adp.u[4]},{adp.u[3],adp.u[1],adp.u[5]},{adp.u[4],adp.u[5],adp.u[2]}},t[3][3]={{0}},c[3][3]={{0}}; for(int i=0;i<3;++i)for(int j=0;j<3;++j)for(int k=0;k<3;++k)t[i][j]+=n[i][k]*u[k][j]; for(int i=0;i<3;++i)for(int j=0;j<3;++j)for(int k=0;k<3;++k)c[i][j]+=t[i][k]*n[j][k]; double vals[6]={c[0][0],c[1][1],c[2][2],c[0][1],c[0][2],c[1][2]}; for(int i=0;i<6;++i) mmSetD(atom,string("adp_Ucart_")+mmAdpNames[i],vals[i]); mmSetPair(atom,"adp_basis","cif cartesian"); }
      }
    } else mmSetPair(atom,"adp_basis","cif");
-   mmSetPair(atom,"adp_source","mmcif_atom_site_aniso"); mmSetPair(atom,"adp_probability_default","0.50"); mmSetPair(atom,"adp_valid",adp.valid?"true":"false"); mmSetPair(atom,"adp_input_type",adp.inputIsB?"B":"U");
+   mmSetPair(atom,"adp_source",adp.source); mmSetPair(atom,"adp_probability_default","0.50"); mmSetPair(atom,"adp_valid",adp.valid?"true":"false"); mmSetPair(atom,"adp_input_type",adp.inputIsB?"B":"U");
  }
 
  bool mmCIFFormat::ReadMolecule(OBBase* pOb, OBConversion* pConv)
@@ -900,24 +916,42 @@ namespace OpenBabel
            }
            break;
 
-         case CIFTagID::atom_site_aniso:
+         case CIFTagID::atom_site_anisotrop:
            {
            size_t column_idx = 0;
            string label;
-           double vals[6]; bool got[6]; bool inputIsB=false;
+           double vals[6]; bool got[6]; bool inputIsB=false; bool standardAnisotrop=false;
            for(int i=0;i<6;++i){ vals[i]=0.0; got[i]=false; }
            while (token.type == CIFLexer::ValueToken)
              {
              CIFTagID::CIFDataName col = columns[column_idx];
-             if (col == CIFTagID::_atom_site_aniso_label) label = token.as_text;
-             else if (col >= CIFTagID::_atom_site_aniso_U_11 && col <= CIFTagID::_atom_site_aniso_U_23) { int idx = col - CIFTagID::_atom_site_aniso_U_11; double v; if (mmParseDouble(token.as_text, v)) { vals[idx]=v; got[idx]=true; } }
-             else if (col >= CIFTagID::_atom_site_aniso_B_11 && col <= CIFTagID::_atom_site_aniso_B_23) { int idx = col - CIFTagID::_atom_site_aniso_B_11; if (!got[idx]) { double v; if (mmParseDouble(token.as_text, v)) { vals[idx]=v/(8.0*M_PI*M_PI); got[idx]=true; inputIsB=true; } } }
+             if (col == CIFTagID::_atom_site_anisotrop_id) { label = token.as_text; standardAnisotrop = true; }
+             else if (col == CIFTagID::_atom_site_aniso_label) label = token.as_text;
+             else {
+               int idx = -1; bool isB = false;
+               switch (col) {
+               case CIFTagID::_atom_site_aniso_U_11: idx = 0; break;
+               case CIFTagID::_atom_site_aniso_U_22: idx = 1; break;
+               case CIFTagID::_atom_site_aniso_U_33: idx = 2; break;
+               case CIFTagID::_atom_site_aniso_U_12: idx = 3; break;
+               case CIFTagID::_atom_site_aniso_U_13: idx = 4; break;
+               case CIFTagID::_atom_site_aniso_U_23: idx = 5; break;
+               case CIFTagID::_atom_site_aniso_B_11: idx = 0; isB = true; break;
+               case CIFTagID::_atom_site_aniso_B_22: idx = 1; isB = true; break;
+               case CIFTagID::_atom_site_aniso_B_33: idx = 2; isB = true; break;
+               case CIFTagID::_atom_site_aniso_B_12: idx = 3; isB = true; break;
+               case CIFTagID::_atom_site_aniso_B_13: idx = 4; isB = true; break;
+               case CIFTagID::_atom_site_aniso_B_23: idx = 5; isB = true; break;
+               default: break;
+               }
+               if (idx >= 0 && (!got[idx] || !isB)) { double v; if (mmParseDouble(token.as_text, v)) { vals[idx]=isB ? v/(8.0*M_PI*M_PI) : v; got[idx]=true; inputIsB=isB; } }
+             }
              ++ column_idx;
              if (column_idx == column_count)
                {
                bool complete = !label.empty(); for(int i=0;i<6;++i) complete = complete && got[i];
-               if (complete) { MMCIFADP& a = adps_by_label[label]; for(int i=0;i<6;++i) a.u[i]=vals[i]; a.complete=true; a.valid=mmValidTensor(a.u); a.inputIsB=inputIsB; }
-               label.clear(); for(int i=0;i<6;++i){ vals[i]=0.0; got[i]=false; } inputIsB=false; column_idx = 0;
+               if (complete) { MMCIFADP& a = adps_by_label[label]; for(int i=0;i<6;++i) a.u[i]=vals[i]; a.complete=true; a.valid=mmValidTensor(a.u); a.inputIsB=inputIsB; a.source = standardAnisotrop ? "mmcif_atom_site_anisotrop" : "mmcif_atom_site_aniso"; }
+               label.clear(); for(int i=0;i<6;++i){ vals[i]=0.0; got[i]=false; } inputIsB=false; standardAnisotrop=false; column_idx = 0;
                }
              token_peeked = lexer.next_token(token);
              }

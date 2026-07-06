@@ -1523,8 +1523,10 @@ namespace OpenBabel
   /////////////////////////////////////////////////////////////////
   bool CIFFormat::ReadMolecule(OBBase* pOb, OBConversion* pConv)
   {
-    // Use the classic CIF parser for .cif input so core CIF loops such as
-    // _atom_site_aniso are preserved by the CIF-specific import path.
+    // If installed, use the mmCIF parser to read CIF
+    OBFormat *obformat = OBFormat::FindType("mmcif");
+    if (obformat) { return obformat->ReadMolecule(pOb, pConv); }
+    obErrorLog.ThrowError(__FUNCTION__, "mmCIF parser not found. Using CIF parser.", obDebug);
 
     OBMol* pmol = dynamic_cast<OBMol*>(pOb);
     if (pmol == nullptr)
@@ -1805,7 +1807,6 @@ namespace OpenBabel
             << "    _atom_site_aniso_U_23" << endl;
         FOR_ATOMS_OF_MOL(atom, *pmol)
           {
-            try {
             bool complete = true;
             double vals[6];
             for (int j=0;j<6;++j) {
@@ -1814,17 +1815,12 @@ namespace OpenBabel
               vals[j] = pd ? atof(pd->GetValue().c_str()) : 0.0;
               complete = complete && (pd != nullptr);
             }
-            if (!complete) continue;
-            std::string adpLabel;
-            OBPairData *label = dynamic_cast<OBPairData *>(atom->GetData("_atom_site_label"));
-            if (label)
-              adpLabel = label->GetValue();
-            else
-              adpLabel = std::string(OBElements::GetSymbol(atom->GetAtomicNum())) + to_string(atom->GetIdx());
+            std::map<OBAtom*, std::string>::const_iterator label = label_table.find(&*atom);
+            if (!complete || label == label_table.end())
+              continue;
             snprintf(buffer, BUFF_SIZE, "    %-8s %.8g %.8g %.8g %.8g %.8g %.8g\n",
-                     adpLabel.c_str(), vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
+                     label->second.c_str(), vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
             ofs << buffer;
-            } catch (const std::exception& e) { obErrorLog.ThrowError(__FUNCTION__, std::string("Skipping CIF ADP row: ")+e.what(), obWarning); }
           }
       }
 
