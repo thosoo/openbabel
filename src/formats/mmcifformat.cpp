@@ -898,7 +898,8 @@ namespace OpenBabel
                { double v; if (mmParseDouble(token.as_text, v)) { mmSetD(atom, "adp_B_iso_or_equiv", v); if (!atom->HasData("adp_U_iso_or_equiv")) mmSetD(atom, "adp_U_iso_or_equiv", v/(8.0*mmCIFPi*mmCIFPi)); mmSetPair(atom, "adp_U_iso_source", "B_iso_or_equiv"); } }
                break;
              case CIFTagID::_atom_site_adp_type:
-               mmSetPair(atom, "adp_type", token.as_text);
+               if (!token.as_text.empty() && token.as_text != "." && token.as_text != "?")
+                 mmSetPair(atom, "adp_type", token.as_text);
                break;
              case CIFTagID::unread_CIFDataName:
              default:
