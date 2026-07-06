@@ -29,6 +29,9 @@ GNU General Public License for more details.
 #include <openbabel/obiter.h>
 #include <openbabel/generic.h>
 #include <cstdlib>
+#include <cmath>
+#include <iomanip>
+#include <limits>
 
 #include <openbabel/math/spacegroup.h>
 
@@ -154,6 +157,74 @@ namespace OpenBabel
     while( n-- > 0 && tolower(*s) != tolower(a) ) ++s;
     return s;
   }
+  struct ADPTensor
+  {
+    ADPTensor(): complete(false), valid(false), hasCart(false), inputIsB(false), hasUIso(false), hasBIso(false) { for (int i=0;i<6;++i) { u[i]=0.0; ucart[i]=0.0; } uIso = bIso = 0.0; }
+    double u[6], ucart[6], uIso, bIso;
+    bool complete, valid, hasCart, inputIsB, hasUIso, hasBIso;
+    std::string isoSource;
+  };
+
+  static const char* adpNames[6] = { "11", "22", "33", "12", "13", "23" };
+
+  static bool parseCIFDouble(const std::string& s, double& value)
+  {
+    if (s.empty() || s == "." || s == "?") return false;
+    char* end = nullptr;
+    value = strtod(s.c_str(), &end);
+    return end != s.c_str() && std::isfinite(value);
+  }
+
+  static bool hasCompleteAnisotropicTensor(const ADPTensor& adp) { return adp.complete; }
+  static bool isFiniteTensor(const double u[6])
+  { for (int i=0;i<6;++i) if (!std::isfinite(u[i]) || fabs(u[i]) > 1.0e6) return false; return true; }
+  static bool isReasonablyPositiveSemidefinite(const double u[6])
+  {
+    if (u[0] < -1.0e-6 || u[1] < -1.0e-6 || u[2] < -1.0e-6) return false;
+    if (u[0]*u[1] - u[3]*u[3] < -1.0e-6) return false;
+    if (u[0]*u[2] - u[4]*u[4] < -1.0e-6) return false;
+    if (u[1]*u[2] - u[5]*u[5] < -1.0e-6) return false;
+    double det = u[0]*u[1]*u[2] + 2*u[3]*u[4]*u[5] - u[0]*u[5]*u[5] - u[1]*u[4]*u[4] - u[2]*u[3]*u[3];
+    return det >= -1.0e-6;
+  }
+
+  static void setPairString(OBAtom* atom, const std::string& attr, const std::string& value)
+  { OBPairData* pd = new OBPairData; pd->SetAttribute(attr); pd->SetValue(value); pd->SetOrigin(fileformatInput); atom->SetData(pd); }
+  static void setPairDoubleString(OBAtom* atom, const std::string& attr, double value)
+  { std::ostringstream os; os << std::setprecision(12) << value; setPairString(atom, attr, os.str()); }
+
+  static void attachADPToAtom(OBAtom* atom, const ADPTensor& adp, const std::string& source)
+  {
+    if (hasCompleteAnisotropicTensor(adp)) {
+      for (int i=0;i<6;++i) setPairDoubleString(atom, std::string("adp_U_") + adpNames[i], adp.u[i]);
+      if (adp.hasCart) for (int i=0;i<6;++i) setPairDoubleString(atom, std::string("adp_Ucart_") + adpNames[i], adp.ucart[i]);
+      setPairString(atom, "adp_source", source);
+      setPairString(atom, "adp_basis", adp.hasCart ? "cif cartesian" : "cif");
+      setPairString(atom, "adp_probability_default", "0.50");
+      setPairString(atom, "adp_valid", adp.valid ? "true" : "false");
+      setPairString(atom, "adp_input_type", adp.inputIsB ? "B" : "U");
+    }
+    if (adp.hasUIso) setPairDoubleString(atom, "adp_U_iso_or_equiv", adp.uIso);
+    if (adp.hasBIso) setPairDoubleString(atom, "adp_B_iso_or_equiv", adp.bIso);
+    if (adp.hasUIso || adp.hasBIso) setPairString(atom, "adp_U_iso_source", adp.isoSource);
+  }
+
+  static void computeADPCartesian(ADPTensor& adp, double alpha, double beta, double gamma)
+  {
+    double ca=cos(alpha), cb=cos(beta), cg=cos(gamma), sg=sin(gamma);
+    if (fabs(sg) < 1.0e-12) return;
+    double n[3][3] = {{1.0, cg, cb}, {0.0, sg, (ca - cb*cg)/sg}, {0.0, 0.0, 0.0}};
+    double z2 = 1.0 - n[0][2]*n[0][2] - n[1][2]*n[1][2];
+    if (z2 < -1.0e-10) return;
+    n[2][2] = sqrt(std::max(0.0, z2));
+    double u[3][3]={{adp.u[0],adp.u[3],adp.u[4]},{adp.u[3],adp.u[1],adp.u[5]},{adp.u[4],adp.u[5],adp.u[2]}};
+    double tmp[3][3]={{0}}, c[3][3]={{0}};
+    for(int i=0;i<3;++i) for(int j=0;j<3;++j) for(int k=0;k<3;++k) tmp[i][j]+=n[i][k]*u[k][j];
+    for(int i=0;i<3;++i) for(int j=0;j<3;++j) for(int k=0;k<3;++k) c[i][j]+=tmp[i][k]*n[j][k];
+    adp.ucart[0]=c[0][0]; adp.ucart[1]=c[1][1]; adp.ucart[2]=c[2][2]; adp.ucart[3]=c[0][1]; adp.ucart[4]=c[0][2]; adp.ucart[5]=c[1][2]; adp.hasCart=true;
+  }
+
+
   //############################## CIF CLASSES headers####################################################
   /** The CIFData class holds all the information from a \e single data_ block from a cif file.
    *
@@ -200,6 +271,7 @@ namespace OpenBabel
     void ExtractBonds();
     //// Extract Charges information from cif file and assign it to atoms
     void ExtractCharges();
+    void ExtractAnisotropicDisplacements();
     /// Generate fractional coordinates from cartesian ones for all atoms
     /// CIFData::CalcMatrices() must be called first
     void Cartesian2FractionalCoord();
@@ -252,6 +324,7 @@ namespace OpenBabel
       float mOccupancy;
       //charge from oxydation
       float mCharge;
+      ADPTensor mADP;
     };
     /// Atoms, if any are found
     std::vector<CIFAtom> mvAtom;
@@ -359,6 +432,7 @@ namespace OpenBabel
     this->ExtractSpacegroup();
     this->ExtractUnitCell();
     this->ExtractAtomicPositions();
+    this->ExtractAnisotropicDisplacements();
     if(mvAtom.size()==0)
       {
         stringstream ss;
@@ -841,6 +915,58 @@ namespace OpenBabel
             obErrorLog.ThrowError(__FUNCTION__, ss.str(), obDebug);
           }
       }
+  }
+
+
+  void CIFData::ExtractAnisotropicDisplacements()
+  {
+    std::map<std::string, CIFAtom*> byLabel;
+    for (size_t i=0;i<mvAtom.size();++i) if (!mvAtom[i].mLabel.empty()) byLabel[mvAtom[i].mLabel] = &mvAtom[i];
+    const double bToU = 1.0 / (8.0 * M_PI * M_PI);
+    for (map<set<ci_string>,map<ci_string,vector<string> > >::const_iterator loop=mvLoop.begin(); loop!=mvLoop.end(); ++loop) {
+      map<ci_string,vector<string> >::const_iterator poslabel = loop->second.find("_atom_site_aniso_label");
+      if (poslabel != loop->second.end()) {
+        const char* utags[6] = {"_atom_site_aniso_U_11","_atom_site_aniso_U_22","_atom_site_aniso_U_33","_atom_site_aniso_U_12","_atom_site_aniso_U_13","_atom_site_aniso_U_23"};
+        const char* btags[6] = {"_atom_site_aniso_B_11","_atom_site_aniso_B_22","_atom_site_aniso_B_33","_atom_site_aniso_B_12","_atom_site_aniso_B_13","_atom_site_aniso_B_23"};
+        map<ci_string,vector<string> >::const_iterator upos[6], bpos[6];
+        bool hasU=true, hasB=true;
+        for (int j=0;j<6;++j) { upos[j]=loop->second.find(utags[j]); bpos[j]=loop->second.find(btags[j]); hasU &= (upos[j]!=loop->second.end()); hasB &= (bpos[j]!=loop->second.end()); }
+        if (!hasU && !hasB) continue;
+        for (size_t i=0;i<poslabel->second.size();++i) {
+          std::map<std::string,CIFAtom*>::iterator ai = byLabel.find(poslabel->second[i]);
+          if (ai == byLabel.end()) continue;
+          ADPTensor& adp = ai->second->mADP;
+          adp.inputIsB = !hasU;
+          bool ok = true;
+          for (int j=0;j<6;++j) {
+            double v;
+            const vector<string>& vals = hasU ? upos[j]->second : bpos[j]->second;
+            if (i >= vals.size() || !parseCIFDouble(vals[i], v)) { ok=false; break; }
+            adp.u[j] = hasU ? v : v * bToU;
+          }
+          adp.complete = ok;
+          if (ok) {
+            adp.valid = isFiniteTensor(adp.u) && isReasonablyPositiveSemidefinite(adp.u);
+            if (mvLatticePar.size()==6) computeADPCartesian(adp, mvLatticePar[3], mvLatticePar[4], mvLatticePar[5]);
+          }
+        }
+      }
+      map<ci_string,vector<string> >::const_iterator siteLabel = loop->second.find("_atom_site_label");
+      if (siteLabel != loop->second.end()) {
+        map<ci_string,vector<string> >::const_iterator uiso = loop->second.find("_atom_site_U_iso_or_equiv");
+        map<ci_string,vector<string> >::const_iterator biso = loop->second.find("_atom_site_B_iso_or_equiv");
+        map<ci_string,vector<string> >::const_iterator adptype = loop->second.find("_atom_site_adp_type");
+        for (size_t i=0;i<siteLabel->second.size();++i) {
+          std::map<std::string,CIFAtom*>::iterator ai = byLabel.find(siteLabel->second[i]);
+          if (ai == byLabel.end()) continue;
+          ADPTensor& adp = ai->second->mADP;
+          double v;
+          if (uiso != loop->second.end() && i < uiso->second.size() && parseCIFDouble(uiso->second[i], v)) { adp.uIso=v; adp.hasUIso=true; adp.isoSource="U_iso_or_equiv"; }
+          if (biso != loop->second.end() && i < biso->second.size() && parseCIFDouble(biso->second[i], v)) { adp.bIso=v; adp.hasBIso=true; if (!adp.hasUIso) { adp.uIso=v*bToU; adp.hasUIso=true; adp.isoSource="B_iso_or_equiv"; } }
+          if (adptype != loop->second.end() && i < adptype->second.size() && !adptype->second[i].empty()) adp.isoSource=adptype->second[i];
+        }
+      }
+    }
   }
 
   void CIFData::ExtractBonds()
@@ -1397,10 +1523,8 @@ namespace OpenBabel
   /////////////////////////////////////////////////////////////////
   bool CIFFormat::ReadMolecule(OBBase* pOb, OBConversion* pConv)
   {
-    // If installed, use the mmCIF parser to read CIF
-    OBFormat *obformat = OBFormat::FindType("mmcif");
-    if (obformat) { return obformat->ReadMolecule(pOb, pConv); }
-    obErrorLog.ThrowError(__FUNCTION__, "mmCIF parser not found. Using CIF parser.", obDebug);
+    // Use the classic CIF parser for .cif input so core CIF loops such as
+    // _atom_site_aniso are preserved by the CIF-specific import path.
 
     OBMol* pmol = dynamic_cast<OBMol*>(pOb);
     if (pmol == nullptr)
@@ -1507,6 +1631,8 @@ namespace OpenBabel
               occup_data->SetValue(posat->mOccupancy);
               occup_data->SetOrigin(fileformatInput);
               atom->SetData(occup_data);
+
+              attachADPToAtom(atom, posat->mADP, "cif_atom_site_aniso");
 
               if( posat->mCharge != NOCHARGE )
               {
@@ -1658,6 +1784,48 @@ namespace OpenBabel
                   X, Y, Z, occup);
 
          ofs << buffer;
+      }
+
+    bool hasAdp = false;
+    FOR_ATOMS_OF_MOL(atom, *pmol)
+      {
+        bool complete = true;
+        for (int j=0;j<6;++j) complete = complete && atom->HasData(std::string("adp_U_") + adpNames[j]);
+        if (complete) { hasAdp = true; break; }
+      }
+    if (hasAdp)
+      {
+        ofs << "loop_" << endl
+            << "    _atom_site_aniso_label" << endl
+            << "    _atom_site_aniso_U_11" << endl
+            << "    _atom_site_aniso_U_22" << endl
+            << "    _atom_site_aniso_U_33" << endl
+            << "    _atom_site_aniso_U_12" << endl
+            << "    _atom_site_aniso_U_13" << endl
+            << "    _atom_site_aniso_U_23" << endl;
+        FOR_ATOMS_OF_MOL(atom, *pmol)
+          {
+            try {
+            bool complete = true;
+            double vals[6];
+            for (int j=0;j<6;++j) {
+              OBGenericData* gd = atom->GetData(std::string("adp_U_") + adpNames[j]);
+              OBPairData* pd = dynamic_cast<OBPairData*>(gd);
+              vals[j] = pd ? atof(pd->GetValue().c_str()) : 0.0;
+              complete = complete && (pd != nullptr);
+            }
+            if (!complete) continue;
+            std::string adpLabel;
+            OBPairData *label = dynamic_cast<OBPairData *>(atom->GetData("_atom_site_label"));
+            if (label)
+              adpLabel = label->GetValue();
+            else
+              adpLabel = std::string(OBElements::GetSymbol(atom->GetAtomicNum())) + to_string(atom->GetIdx());
+            snprintf(buffer, BUFF_SIZE, "    %-8s %.8g %.8g %.8g %.8g %.8g %.8g\n",
+                     adpLabel.c_str(), vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
+            ofs << buffer;
+            } catch (const std::exception& e) { obErrorLog.ThrowError(__FUNCTION__, std::string("Skipping CIF ADP row: ")+e.what(), obWarning); }
+          }
       }
 
     if (pConv->IsOption("g", OBConversion::OUTOPTIONS))
