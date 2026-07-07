@@ -224,8 +224,8 @@ static void testCIFClassicAnisoLoopViaCIFEntryPoint()
     "_atom_site_U_iso_or_equiv\n"
     "_atom_site_adp_type\n"
     "_atom_site_occupancy\n"
-    "C1 C 0.8169 0.4433 0.71499 0.0194 Uani 1\n"
-    "C2 C 0.7692 0.3488 0.66269 0.0179 Uani 1\n"
+    "C1 C 0.8169(3) 0.4433(2) 0.71499(15) 0.0194(4) Uani 1\n"
+    "C2 C 0.7692(3) 0.3488(2) 0.66269(15) 0.0179(4) Uani 1\n"
     "\n"
     "loop_\n"
     "_atom_site_aniso_label\n"
@@ -235,8 +235,8 @@ static void testCIFClassicAnisoLoopViaCIFEntryPoint()
     "_atom_site_aniso_U_23\n"
     "_atom_site_aniso_U_13\n"
     "_atom_site_aniso_U_12\n"
-    "C1 0.0231 0.0235 0.0118 0.0011 0.0036 0.0017\n"
-    "C2 0.0198 0.0185 0.0159 0.0031 0.0045 0.0016\n";
+    "C1 0.0231(11) 0.0235(11) 0.0118(10) 0.0011(9) 0.0036(8) 0.0017(9)\n"
+    "C2 0.0198(10) 0.0185(10) 0.0159(10) 0.0031(8) 0.0045(8) 0.0016(8)\n";
 
   OBConversion conv;
   OB_REQUIRE(conv.SetInFormat("cif"));
