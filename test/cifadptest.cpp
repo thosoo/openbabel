@@ -249,6 +249,8 @@ static void testCIFClassicAnisoLoopViaCIFEntryPoint()
   OB_COMPARE(pairAsString(atom, "adp_basis"), string("cif cartesian"));
   OB_COMPARE(pairAsString(atom, "adp_input_type"), string("U"));
   OB_COMPARE(pairAsString(atom, "adp_type"), string("Uani"));
+  const string source = pairAsString(atom, "adp_source");
+  OB_ASSERT(source == "mmcif_atom_site_aniso" || source == "cif_atom_site_aniso");
 
   OB_ASSERT(near(pairAsDouble(atom, "adp_U_11"), 0.0231));
   OB_ASSERT(near(pairAsDouble(atom, "adp_U_22"), 0.0235));
@@ -261,8 +263,14 @@ static void testCIFClassicAnisoLoopViaCIFEntryPoint()
     "adp_Ucart_11", "adp_Ucart_22", "adp_Ucart_33",
     "adp_Ucart_12", "adp_Ucart_13", "adp_Ucart_23"
   };
-  for (int i = 0; i < 6; ++i)
-    OB_ASSERT(isfinite(pairAsDouble(atom, cartFields[i])));
+  double maxCart = 0.0;
+  for (int i = 0; i < 6; ++i) {
+    const double value = pairAsDouble(atom, cartFields[i]);
+    OB_ASSERT(isfinite(value));
+    if (fabs(value) > maxCart)
+      maxCart = fabs(value);
+  }
+  OB_ASSERT(maxCart > 0.0);
 }
 
 int cifadptest(int argc, char* argv[])
