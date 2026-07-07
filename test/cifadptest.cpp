@@ -203,6 +203,68 @@ static void testCIFADPTypeMetadata()
   OB_COMPARE(pairAsString(atom, "adp_type"), string("Uani"));
 }
 
+static void testCIFClassicAnisoLoopViaCIFEntryPoint()
+{
+  const string cif =
+    "data_adp_real_cif_minimal\n"
+    "_cell_length_a 6.9827\n"
+    "_cell_length_b 11.8748\n"
+    "_cell_length_c 15.1296\n"
+    "_cell_angle_alpha 90\n"
+    "_cell_angle_beta 98.397\n"
+    "_cell_angle_gamma 90\n"
+    "_space_group_name_H-M_alt 'P 1'\n"
+    "\n"
+    "loop_\n"
+    "_atom_site_label\n"
+    "_atom_site_type_symbol\n"
+    "_atom_site_fract_x\n"
+    "_atom_site_fract_y\n"
+    "_atom_site_fract_z\n"
+    "_atom_site_U_iso_or_equiv\n"
+    "_atom_site_adp_type\n"
+    "_atom_site_occupancy\n"
+    "C1 C 0.8169 0.4433 0.71499 0.0194 Uani 1\n"
+    "C2 C 0.7692 0.3488 0.66269 0.0179 Uani 1\n"
+    "\n"
+    "loop_\n"
+    "_atom_site_aniso_label\n"
+    "_atom_site_aniso_U_11\n"
+    "_atom_site_aniso_U_22\n"
+    "_atom_site_aniso_U_33\n"
+    "_atom_site_aniso_U_23\n"
+    "_atom_site_aniso_U_13\n"
+    "_atom_site_aniso_U_12\n"
+    "C1 0.0231 0.0235 0.0118 0.0011 0.0036 0.0017\n"
+    "C2 0.0198 0.0185 0.0159 0.0031 0.0045 0.0016\n";
+
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInFormat("cif"));
+  OBMol mol;
+  OB_REQUIRE(conv.ReadString(&mol, cif));
+  OB_COMPARE(mol.NumAtoms(), 2u);
+
+  OBAtom* atom = mol.GetAtom(1);
+  OB_COMPARE(pairAsString(atom, "adp_valid"), string("true"));
+  OB_COMPARE(pairAsString(atom, "adp_basis"), string("cif cartesian"));
+  OB_COMPARE(pairAsString(atom, "adp_input_type"), string("U"));
+  OB_COMPARE(pairAsString(atom, "adp_type"), string("Uani"));
+
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_11"), 0.0231));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_22"), 0.0235));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_33"), 0.0118));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_23"), 0.0011));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_13"), 0.0036));
+  OB_ASSERT(near(pairAsDouble(atom, "adp_U_12"), 0.0017));
+
+  const char* cartFields[6] = {
+    "adp_Ucart_11", "adp_Ucart_22", "adp_Ucart_33",
+    "adp_Ucart_12", "adp_Ucart_13", "adp_Ucart_23"
+  };
+  for (int i = 0; i < 6; ++i)
+    OB_ASSERT(isfinite(pairAsDouble(atom, cartFields[i])));
+}
+
 int cifadptest(int argc, char* argv[])
 {
 #ifdef FORMATDIR
@@ -218,6 +280,7 @@ int cifadptest(int argc, char* argv[])
   case 2: testCIFADPWriterUsesAtomSiteLabels(); break;
   case 3: testMMCIFAnisotropBTensorConversion(); break;
   case 4: testCIFADPTypeMetadata(); break;
+  case 5: testCIFClassicAnisoLoopViaCIFEntryPoint(); break;
   default: return -1;
   }
   return 0;
