@@ -296,19 +296,45 @@ static void testCIFRealWorldEllipsoidFixtures()
     OB_REQUIRE(conv.ReadFile(&mol, OBTestUtil::GetFilename(fixtures[i].filename)));
     OB_COMPARE(mol.NumAtoms(), fixtures[i].atoms);
 
-    unsigned int atomsWithAdps = 0;
+    unsigned int atomsWithCompleteCartesianAdps = 0;
     for (unsigned int atomIdx = 1; atomIdx <= mol.NumAtoms(); ++atomIdx) {
       OBAtom* atom = mol.GetAtom(atomIdx);
       if (!atom->GetData("adp_U_11"))
         continue;
-      ++atomsWithAdps;
+      ++atomsWithCompleteCartesianAdps;
       OB_COMPARE(pairAsString(atom, "adp_valid"), string("true"));
+      OB_COMPARE(pairAsString(atom, "adp_basis"), string("cif cartesian"));
       OB_COMPARE(pairAsString(atom, "adp_input_type"), string("U"));
-      OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_11")));
-      OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_22")));
-      OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_33")));
+      const string source = pairAsString(atom, "adp_source");
+      OB_ASSERT(source == "mmcif_atom_site_aniso" || source == "cif_atom_site_aniso");
+
+      const char* rawFields[6] = {
+        "adp_U_11", "adp_U_22", "adp_U_33",
+        "adp_U_12", "adp_U_13", "adp_U_23"
+      };
+
+      const char* cartFields[6] = {
+        "adp_Ucart_11", "adp_Ucart_22", "adp_Ucart_33",
+        "adp_Ucart_12", "adp_Ucart_13", "adp_Ucart_23"
+      };
+
+      double maxRaw = 0.0;
+      double maxCart = 0.0;
+      for (int j = 0; j < 6; ++j) {
+        const double raw = pairAsDouble(atom, rawFields[j]);
+        OB_ASSERT(isfinite(raw));
+        if (fabs(raw) > maxRaw)
+          maxRaw = fabs(raw);
+
+        const double cart = pairAsDouble(atom, cartFields[j]);
+        OB_ASSERT(isfinite(cart));
+        if (fabs(cart) > maxCart)
+          maxCart = fabs(cart);
+      }
+      OB_ASSERT(maxRaw > 0.0);
+      OB_ASSERT(maxCart > 0.0);
     }
-    OB_ASSERT(atomsWithAdps >= fixtures[i].atomsWithAdps);
+    OB_COMPARE(atomsWithCompleteCartesianAdps, fixtures[i].atomsWithAdps);
   }
 }
 
