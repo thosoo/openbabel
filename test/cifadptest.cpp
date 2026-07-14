@@ -301,7 +301,6 @@ static void testCIFRealWorldEllipsoidFixtures()
       OBAtom* atom = mol.GetAtom(atomIdx);
       if (!atom->GetData("adp_U_11"))
         continue;
-      ++atomsWithCompleteCartesianAdps;
       OB_COMPARE(pairAsString(atom, "adp_valid"), string("true"));
       OB_COMPARE(pairAsString(atom, "adp_basis"), string("cif cartesian"));
       OB_COMPARE(pairAsString(atom, "adp_input_type"), string("U"));
@@ -333,6 +332,7 @@ static void testCIFRealWorldEllipsoidFixtures()
       }
       OB_ASSERT(maxRaw > 0.0);
       OB_ASSERT(maxCart > 0.0);
+      ++atomsWithCompleteCartesianAdps;
     }
     OB_COMPARE(atomsWithCompleteCartesianAdps, fixtures[i].atomsWithAdps);
   }
