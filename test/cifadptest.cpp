@@ -275,19 +275,26 @@ static void testCIFClassicAnisoLoopViaCIFEntryPoint()
 
 static void testCIFRealWorldEllipsoidFixtures()
 {
-  const char* files[] = {
-    "cif-ellipsoids/1548467.cif",
-    "cif-ellipsoids/4335632.cif",
-    "cif-ellipsoids/4124388.cif"
+  struct FixtureExpectation
+  {
+    const char* filename;
+    unsigned int atoms;
+    unsigned int atomsWithAdps;
+  };
+
+  const FixtureExpectation fixtures[] = {
+    { "cif-ellipsoids/1548467.cif", 19, 19 },
+    { "cif-ellipsoids/4335632.cif", 5, 3 },
+    { "cif-ellipsoids/4124388.cif", 11, 5 }
   };
 
   OBConversion conv;
   OB_REQUIRE(conv.SetInFormat("cif"));
 
-  for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); ++i) {
+  for (size_t i = 0; i < sizeof(fixtures) / sizeof(fixtures[0]); ++i) {
     OBMol mol;
-    OB_REQUIRE(conv.ReadFile(&mol, OBTestUtil::GetFilename(files[i])));
-    OB_ASSERT(mol.NumAtoms() > 0);
+    OB_REQUIRE(conv.ReadFile(&mol, OBTestUtil::GetFilename(fixtures[i].filename)));
+    OB_COMPARE(mol.NumAtoms(), fixtures[i].atoms);
 
     unsigned int atomsWithAdps = 0;
     for (unsigned int atomIdx = 1; atomIdx <= mol.NumAtoms(); ++atomIdx) {
@@ -301,7 +308,7 @@ static void testCIFRealWorldEllipsoidFixtures()
       OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_22")));
       OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_33")));
     }
-    OB_ASSERT(atomsWithAdps > 0);
+    OB_ASSERT(atomsWithAdps >= fixtures[i].atomsWithAdps);
   }
 }
 
