@@ -273,6 +273,38 @@ static void testCIFClassicAnisoLoopViaCIFEntryPoint()
   OB_ASSERT(maxCart > 0.0);
 }
 
+static void testCIFRealWorldEllipsoidFixtures()
+{
+  const char* files[] = {
+    "cif-ellipsoids/1548467.cif",
+    "cif-ellipsoids/4335632.cif",
+    "cif-ellipsoids/4124388.cif"
+  };
+
+  OBConversion conv;
+  OB_REQUIRE(conv.SetInFormat("cif"));
+
+  for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); ++i) {
+    OBMol mol;
+    OB_REQUIRE(conv.ReadFile(&mol, OBTestUtil::GetFilename(files[i])));
+    OB_ASSERT(mol.NumAtoms() > 0);
+
+    unsigned int atomsWithAdps = 0;
+    for (unsigned int atomIdx = 1; atomIdx <= mol.NumAtoms(); ++atomIdx) {
+      OBAtom* atom = mol.GetAtom(atomIdx);
+      if (!atom->GetData("adp_U_11"))
+        continue;
+      ++atomsWithAdps;
+      OB_COMPARE(pairAsString(atom, "adp_valid"), string("true"));
+      OB_COMPARE(pairAsString(atom, "adp_input_type"), string("U"));
+      OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_11")));
+      OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_22")));
+      OB_ASSERT(isfinite(pairAsDouble(atom, "adp_U_33")));
+    }
+    OB_ASSERT(atomsWithAdps > 0);
+  }
+}
+
 int cifadptest(int argc, char* argv[])
 {
 #ifdef FORMATDIR
@@ -289,6 +321,7 @@ int cifadptest(int argc, char* argv[])
   case 3: testMMCIFAnisotropBTensorConversion(); break;
   case 4: testCIFADPTypeMetadata(); break;
   case 5: testCIFClassicAnisoLoopViaCIFEntryPoint(); break;
+  case 6: testCIFRealWorldEllipsoidFixtures(); break;
   default: return -1;
   }
   return 0;
