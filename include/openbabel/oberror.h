@@ -212,8 +212,10 @@ namespace OpenBabel
       //! Call OBMessageHandler::ThrowError() and flush the buffer
       int sync()
         {
-          if (!obErrorLog.IsDestructing())
-            obErrorLog.ThrowError("", str(), obInfo);
+          if (obErrorLog.IsDestructing())
+            return 0;
+
+          obErrorLog.ThrowError("", str(), obInfo);
           str(std::string()); // clear the buffer
           return 0;
         }
