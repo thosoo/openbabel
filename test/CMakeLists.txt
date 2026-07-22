@@ -158,6 +158,20 @@ endif()
 add_executable(test_runner ${srclist} obtest.cpp)
 target_link_libraries(test_runner ${libs})
 
+add_executable(test_oberror_global_teardown oberrorglobalteardowntest.cpp)
+target_link_libraries(test_oberror_global_teardown ${libs})
+add_test(NAME test_oberror_global_teardown
+  COMMAND test_oberror_global_teardown)
+if(WIN32)
+  set(_ob_global_teardown_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/;PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\;$ENV{PATH}")
+else()
+  set(_ob_global_teardown_env "BABEL_DATADIR=${CMAKE_SOURCE_DIR}/data;BABEL_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/:${CMAKE_BINARY_DIR}/src:${CMAKE_BINARY_DIR}/lib;LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{LD_LIBRARY_PATH}")
+endif()
+set_tests_properties(test_oberror_global_teardown PROPERTIES
+  ENVIRONMENT "${_ob_global_teardown_env}"
+  LABELS "oberror;regression;teardown;cif"
+  TIMEOUT 30)
+
 if(NOT BUILD_SHARED AND NOT BUILD_MIXED)
   set_target_properties(test_runner PROPERTIES LINK_SEARCH_END_STATIC TRUE)
 endif()
