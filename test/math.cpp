@@ -33,6 +33,9 @@ GNU General Public License for more details.
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
 
 #define REPEAT 1000
 
@@ -301,16 +304,56 @@ void testInversion()
 }
 
 
-/*! The axis of the rotation will be uniformly distributed on
-  the unit sphere and the angle will be uniformly distributed in
-  the interval 0..360 degrees. */
+/*! Build a deterministic rotation used by the eigenvalue tests. */
 void randomRotation(matrix3x3 *mat, double rotAngle)
 {
-  vector3 v1;
-
-  v1.randomUnitVector();
+  vector3 v1(1.0, 2.0, 3.0);
+  v1.normalize();
 
   mat->RotAboutAxisByAngle(v1, rotAngle);
+}
+
+static bool approximatelyEqual(double actual, double expected,
+                               double absTolerance, double relTolerance)
+{
+  const double difference = fabs(actual - expected);
+  const double scale = std::max(fabs(actual), fabs(expected));
+  return difference <= std::max(absTolerance, relTolerance * scale);
+}
+
+static void printEigenvalueDiagnostics(const matrix3x3 &Diagonal,
+                                       const matrix3x3 &toDiagonalize,
+                                       const vector3 &eigenvals,
+                                       unsigned int j,
+                                       double absTolerance,
+                                       double relTolerance)
+{
+  const double actual = eigenvals[j];
+  const double expected = Diagonal.Get(j, j);
+  const double absError = fabs(actual - expected);
+  const double scale = std::max(fabs(actual), fabs(expected));
+  const double relError = scale > 0.0 ? absError / scale : absError;
+  const double spacing01 = fabs(Diagonal.Get(1, 1) - Diagonal.Get(0, 0));
+  const double spacing12 = fabs(Diagonal.Get(2, 2) - Diagonal.Get(1, 1));
+
+  cout << setprecision(17)
+       << "# eigenvalue diagnostic: index=" << j
+       << " expected=[" << Diagonal.Get(0, 0) << ", "
+       << Diagonal.Get(1, 1) << ", " << Diagonal.Get(2, 2) << "]"
+       << " actual=[" << eigenvals[0] << ", " << eigenvals[1]
+       << ", " << eigenvals[2] << "]"
+       << " absError=" << absError
+       << " relError=" << relError
+       << " absTolerance=" << absTolerance
+       << " relTolerance=" << relTolerance
+       << " symmetric=" << toDiagonalize.isSymmetric()
+       << " nearZeroExpected=" << (fabs(expected) <= absTolerance)
+       << " minExpectedSpacing=" << std::min(spacing01, spacing12)
+       << " matrix=["
+       << toDiagonalize.Get(0, 0) << ", " << toDiagonalize.Get(0, 1) << ", " << toDiagonalize.Get(0, 2) << "; "
+       << toDiagonalize.Get(1, 0) << ", " << toDiagonalize.Get(1, 1) << ", " << toDiagonalize.Get(1, 2) << "; "
+       << toDiagonalize.Get(2, 0) << ", " << toDiagonalize.Get(2, 1) << ", " << toDiagonalize.Get(2, 2) << "]"
+       << endl;
 }
 
 static void verifyEigenvaluesForDiagonal(const matrix3x3 &Diagonal)
@@ -324,14 +367,23 @@ static void verifyEigenvaluesForDiagonal(const matrix3x3 &Diagonal)
   // check that rndRotation is really a rotation, i.e. that randomRotation() works
   VERIFY( rndRotation.isOrthogonal() );
 
-  matrix3x3 toDiagonalize = rndRotation * Diagonal * rndRotation.inverse();
+  matrix3x3 toDiagonalize = rndRotation * Diagonal * rndRotation.transpose();
   VERIFY( toDiagonalize.isSymmetric() );
 
   vector3 eigenvals;
   toDiagonalize.findEigenvectorsIfSymmetric(eigenvals);
 
+  const double absTolerance = 1e-10;
+  const double relTolerance = 1e-6;
   for(unsigned int j=0; j<3; j++)
-    VERIFY( compare( eigenvals[j], Diagonal.Get(j,j), 1e-6 ) );
+    {
+      const bool eigenvalueMatches = approximatelyEqual(eigenvals[j], Diagonal.Get(j,j),
+                                                        absTolerance, relTolerance);
+      if (!eigenvalueMatches)
+        printEigenvalueDiagnostics(Diagonal, toDiagonalize, eigenvals, j,
+                                   absTolerance, relTolerance);
+      VERIFY( eigenvalueMatches );
+    }
 
   VERIFY( eigenvals[0] <= eigenvals[1] &&  eigenvals[1] <= eigenvals[2] );
 }
@@ -352,12 +404,26 @@ void testEigenvalues()
 
   verifyEigenvaluesForDiagonal(Diagonal);
 
-  // Repeated eigenvalues are valid for symmetric matrices, and
-  // findEigenvectorsIfSymmetric() documents non-decreasing order.
-  Diagonal.Set(0, 0, 0.25);
-  Diagonal.Set(1, 1, 0.25);
-  Diagonal.Set(2, 2, 0.75);
-  verifyEigenvaluesForDiagonal(Diagonal);
+  const double deterministicEigenvalues[][3] = {
+    {0.25, 0.5, 0.75},
+    {0.0, 0.5, 0.75},
+    {1.0e-14, 0.5, 0.75},
+    {0.25, 0.25, 0.75},
+    {0.25, 0.25, 0.25},
+    {0.25, 0.25 + 1.0e-12, 0.75},
+    {-0.75, -0.25, 0.5},
+    {1.0e-12, 1.0, 1.0e6}
+  };
+
+  for (unsigned int i = 0;
+       i < sizeof(deterministicEigenvalues) / sizeof(deterministicEigenvalues[0]);
+       ++i)
+    {
+      Diagonal.Set(0, 0, deterministicEigenvalues[i][0]);
+      Diagonal.Set(1, 1, deterministicEigenvalues[i][1]);
+      Diagonal.Set(2, 2, deterministicEigenvalues[i][2]);
+      verifyEigenvaluesForDiagonal(Diagonal);
+    }
 }
 
 // Test the eigenvector finder. Set up a symmetric diagonal matrix and
@@ -409,7 +475,7 @@ int math(int argc, char* argv[])
   
   cout << "# math: repeating each test " << REPEAT << " times" << endl;
   
-  randomizer.TimeSeed();
+  randomizer.Seed(0x5eed);
 
   cout << "# Testing MMFF94 Force Field..." << endl;
   switch(choice) {
