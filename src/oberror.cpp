@@ -143,7 +143,8 @@ namespace OpenBabel
   **/
 
   OBMessageHandler::OBMessageHandler() :
-    _outputLevel(obWarning), _outputStream(&clog), _logging(true), _maxEntries(100)
+    _outputLevel(obWarning), _outputStream(&clog), _logging(true), _maxEntries(100),
+    _isDestructing(false)
   {
     _messageCount[0] = _messageCount[1] = _messageCount[2] = 0;
     _messageCount[3] = _messageCount[4] = 0;
@@ -153,6 +154,7 @@ namespace OpenBabel
 
   OBMessageHandler::~OBMessageHandler()
   {
+    _isDestructing = true;
     StopErrorWrap();
 
     // free the internal filter streambuf
@@ -161,6 +163,9 @@ namespace OpenBabel
 
   void OBMessageHandler::ThrowError(OBError err, errorQualifier qualifier)
   {
+    if (_isDestructing)
+      return;
+
     if (!_logging)
       return;
 
@@ -181,6 +186,9 @@ namespace OpenBabel
                                     const std::string &errorMsg,
                                     obMessageLevel level, errorQualifier qualifier)
   {
+    if (_isDestructing)
+      return;
+
     if (errorMsg.length() > 1)
       {
         OBError err(method, errorMsg, "", "", "", level);
@@ -213,7 +221,7 @@ namespace OpenBabel
 
     if (_filterStreamBuf == nullptr)
       {
-        _filterStreamBuf = new(obLogBuf);
+        _filterStreamBuf = new obLogBuf;
       }
 
     cerr.rdbuf(_filterStreamBuf);
