@@ -161,6 +161,8 @@ namespace OpenBabel
       unsigned int GetDebugMessageCount() { return _messageCount[obDebug];}
       //! \return Summary of messages received at all levels
       std::string GetMessageSummary();
+      //! \return whether this handler is currently being destroyed
+      bool IsDestructing() const { return _isDestructing; }
 
     protected:
       //! Log of messages for later retrieval via GetMessagesOfLevel()
@@ -176,6 +178,8 @@ namespace OpenBabel
       bool                   _logging;
       //! The maximum size of _messageList log
       unsigned int           _maxEntries;
+      //! True while this handler is being destroyed; suppresses teardown logging
+      bool                   _isDestructing;
 
       //! The default stream buffer for the output stream (saved if wrapping is ued)
       std::streambuf        *_inWrapStreamBuf;
@@ -208,7 +212,8 @@ namespace OpenBabel
       //! Call OBMessageHandler::ThrowError() and flush the buffer
       int sync()
         {
-          obErrorLog.ThrowError("", str(), obInfo);
+          if (!obErrorLog.IsDestructing())
+            obErrorLog.ThrowError("", str(), obInfo);
           str(std::string()); // clear the buffer
           return 0;
         }
