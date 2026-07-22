@@ -159,7 +159,10 @@ namespace OpenBabel
 
     // free the internal filter streambuf
     if (_filterStreamBuf)
-      delete _filterStreamBuf;
+      {
+        delete _filterStreamBuf;
+        _filterStreamBuf = nullptr;
+      }
   }
 
   void OBMessageHandler::ThrowError(OBError err, errorQualifier qualifier)
@@ -234,8 +237,10 @@ namespace OpenBabel
     if (_inWrapStreamBuf == nullptr)
       return true; // never wrapped cerr
 
-    if (!_isDestructing)
-      cerr.rdbuf(_inWrapStreamBuf);
+    if (_isDestructing)
+      return true; // skip stream operations during global teardown
+
+    cerr.rdbuf(_inWrapStreamBuf);
     _inWrapStreamBuf = nullptr; //shows not wrapped
 
     // don't delete the filter streambuf yet -- we might start wrapping later
