@@ -22,10 +22,16 @@ General Public License for more details.
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <atomic>
 
 #include <openbabel/oberror.h>
 
 using namespace std;
+
+namespace
+{
+  std::atomic<bool> g_obErrorLogDestructing{false};
+}
 
 namespace OpenBabel
 {
@@ -143,8 +149,7 @@ namespace OpenBabel
   **/
 
   OBMessageHandler::OBMessageHandler() :
-    _outputLevel(obWarning), _outputStream(&clog), _logging(true), _maxEntries(100),
-    _isDestructing(false)
+    _outputLevel(obWarning), _outputStream(&clog), _logging(true), _maxEntries(100)
   {
     _messageCount[0] = _messageCount[1] = _messageCount[2] = 0;
     _messageCount[3] = _messageCount[4] = 0;
@@ -154,17 +159,20 @@ namespace OpenBabel
 
   OBMessageHandler::~OBMessageHandler()
   {
-    _isDestructing = true;
+    if (this == &obErrorLog)
+      g_obErrorLogDestructing.store(true, std::memory_order_release);
+
     StopErrorWrap();
 
-    // free the internal filter streambuf
-    if (_filterStreamBuf)
-      delete _filterStreamBuf;
+    // free the internal filter streambuf after cerr no longer points at it
+    std::streambuf* filter = _filterStreamBuf;
+    _filterStreamBuf = nullptr;
+    delete filter;
   }
 
   void OBMessageHandler::ThrowError(OBError err, errorQualifier qualifier)
   {
-    if (_isDestructing)
+    if (IsDestructing())
       return;
 
     if (!_logging)
@@ -187,7 +195,7 @@ namespace OpenBabel
                                     const std::string &errorMsg,
                                     obMessageLevel level, errorQualifier qualifier)
   {
-    if (_isDestructing)
+    if (IsDestructing())
       return;
 
     if (errorMsg.length() > 1)
@@ -234,14 +242,34 @@ namespace OpenBabel
     if (_inWrapStreamBuf == nullptr)
       return true; // never wrapped cerr
 
-    if (!_isDestructing)
-      cerr.rdbuf(_inWrapStreamBuf);
+    cerr.rdbuf(_inWrapStreamBuf);
     _inWrapStreamBuf = nullptr; //shows not wrapped
 
     // don't delete the filter streambuf yet -- we might start wrapping later
     // it's freed in the dtor
 
     return true;
+  }
+
+  bool OBMessageHandler::IsDestructing() const
+  {
+    return this == &obErrorLog &&
+      g_obErrorLogDestructing.load(std::memory_order_acquire);
+  }
+
+  obLogBuf::~obLogBuf()
+  {
+    sync();
+  }
+
+  int obLogBuf::sync()
+  {
+    if (obErrorLog.IsDestructing())
+      return 0;
+
+    obErrorLog.ThrowError("", str(), obInfo);
+    str(std::string()); // clear the buffer
+    return 0;
   }
 
   string OBMessageHandler::GetMessageSummary()
