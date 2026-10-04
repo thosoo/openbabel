@@ -1,0 +1,4 @@
+# Open Babel has no pip-managed Python dependencies.
+# This file exists so `safety check -r requirements.txt` has a defined
+# scope and does not scan the CI runner's base environment (which is not
+# owned by this repo). Keep it empty unless a real binding dependency is added.
