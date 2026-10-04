@@ -40,8 +40,13 @@ using namespace std;
 namespace OpenBabel
 {
   // Initialize globals declared in typer.h
+#if defined(_MSC_VER)
+  OBAromaticTyper  aromtyper;
+  OBAtomTyper      atomtyper;
+#else
   THREAD_LOCAL OBAromaticTyper  aromtyper;
   THREAD_LOCAL OBAtomTyper      atomtyper;
+#endif
 
   /*! \class OBAtomTyper typer.h <openbabel/typer.h>
     \brief Assigns atom types, hybridization, and formal charges
